@@ -5,8 +5,12 @@
 #include <chrono>
 
 #include "Camera.h"
+#include "InputHandler.h"
+#include "PostProcess.h"
 
-struct Camera;
+class Camera;
+class InputHandler;
+class PostProcess;
 
 class Renderer {
 	struct SceneBuffer {
@@ -23,50 +27,15 @@ class Renderer {
 	RTBuffer m_rtBuffer{};
 	ID3D11Buffer* m_pRTBuffer{};
 
-	typedef struct MouseHandler {
-		Renderer& renderer;
-		Camera& camera;
-
-		MouseHandler() = delete;
-		MouseHandler(Renderer& renderer, Camera& camera) :
-			renderer(renderer),
-			camera(camera)
-		{}
-
-		bool isMRBPressed{};
-		int prevMouseX{};
-		int prevMouseY{};
-
-		void mouseRBPressed(bool isPressed, int x, int y);
-		void mouseMoved(int x, int y);
-		void mouseWheel(int delta);
-	} MouseHandler;
-
-	typedef struct KeyboardHandler {
-		Renderer& renderer;
-		Camera& camera;
-
-		KeyboardHandler() = delete;
-		KeyboardHandler(Renderer& renderer, Camera& camera) :
-			renderer(renderer),
-			camera(camera)
-		{}
-
-	private:
-		const float panSpeed{ 2.0 };
-
-	public:
-		void keyPressed(int keyCode);
-		void keyReleased(int keyCode);
-	} KeyboardHandler;
-
 	ID3D11Device* m_pDevice{};
 	ID3D11DeviceContext* m_pDeviceContext{};
 
 	IDXGISwapChain* m_pSwapChain{};
 	ID3D11RenderTargetView* m_pBackBufferRTV{};
 
-	Camera m_camera{};
+	Camera* m_pCamera{};
+
+	PostProcess* m_pPostProcess{};
 
 	float m_cubeAngleRotation{};
 
@@ -111,14 +80,15 @@ class Renderer {
 	double m_cubeTime{};
 	double m_cubeTimeAvg{};
 
-public:
-	MouseHandler m_mouseHandler;
-	KeyboardHandler m_keyboardHandler;
+	float m_near{ 0.1f };
+	float m_far{ 100.f };
+	float m_fov{ DirectX::XM_PI / 3.f };
+	float m_aspectRatio{
+		static_cast<float>(m_height) / m_width
+	};
 
-	Renderer() :
-		m_mouseHandler(*this, m_camera),
-		m_keyboardHandler(*this, m_camera)
-	{}
+public:
+	InputHandler* m_pInputHandler{};
 
 	bool init(HWND hWnd);
 	void term();
@@ -126,6 +96,10 @@ public:
 	bool resize(UINT width, UINT height);
 	bool update();
 	bool render();
+
+	void switchRotation() {
+		m_isModelRotate = !m_isModelRotate;
+	}
 
 private:
 	IDXGIAdapter* selectIDXGIAdapter(IDXGIFactory* factory);

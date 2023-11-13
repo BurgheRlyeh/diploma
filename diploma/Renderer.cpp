@@ -3,98 +3,6 @@
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
-void Renderer::MouseHandler::mouseRBPressed(bool isPressed, int x, int y) {
-	isMRBPressed = isPressed;
-	if (!isMRBPressed) {
-		return;
-	}
-
-	prevMouseX = x;
-	prevMouseY = y;
-}
-
-void Renderer::MouseHandler::mouseMoved(int x, int y) {
-	if (!isMRBPressed) {
-		return;
-	}
-
-	camera.angX -= camera.rotationSpeed * (x - prevMouseX) / renderer.m_width;
-	camera.angY += camera.rotationSpeed * (y - prevMouseY) / renderer.m_height;
-	camera.angY = XMMax(camera.angY, 0.1f - XM_PIDIV2);
-	camera.angY = XMMin(camera.angY, XM_PIDIV2 - 0.1f);
-
-	prevMouseX = x;
-	prevMouseY = y;
-}
-
-void Renderer::MouseHandler::mouseWheel(int delta) {
-	camera.r = XMMax(camera.r - delta / 100.0f, 1.0f);
-}
-
-void Renderer::KeyboardHandler::keyPressed(int keyCode) {
-	switch (keyCode) {
-	case ' ':
-		renderer.m_isModelRotate = !renderer.m_isModelRotate;
-		break;
-
-	case 'W':
-	case 'w':
-		camera.dForward -= panSpeed;
-		break;
-
-	case 'S':
-	case 's':
-		camera.dForward += panSpeed;
-		break;
-
-	case 'D':
-	case 'd':
-		camera.dRight -= panSpeed;
-		break;
-
-	case 'A':
-	case 'a':
-		camera.dRight += panSpeed;
-		break;
-
-	case 'B':
-	case 'b':
-		/*renderer.m_pCube->updateBVH();
-		renderer.m_pGeom->updateBVH();*/
-		break;
-	}
-}
-
-void Renderer::KeyboardHandler::keyReleased(int keyCode) {
-	switch (keyCode) {
-	case 'W':
-	case 'w':
-		renderer.m_camera.dForward += panSpeed;
-		break;
-
-	case 'S':
-	case 's':
-		renderer.m_camera.dForward -= panSpeed;
-		break;
-
-	case 'D':
-	case 'd':
-		renderer.m_camera.dRight += panSpeed;
-		break;
-
-	case 'A':
-	case 'a':
-		renderer.m_camera.dRight -= panSpeed;
-		break;
-
-	case 'B':
-	case 'b':
-		//renderer.m_pCube->updateBVH();
-		//renderer.m_pGeom->updateBVH();
-		break;
-	}
-}
-
 bool Renderer::init(HWND hWnd) {
 	HRESULT hr{ S_OK };
 
@@ -108,20 +16,17 @@ bool Renderer::init(HWND hWnd) {
 	hr = createDeviceAndSwapChain(hWnd, adapter);
 	THROW_IF_FAILED(hr);
 
+	SAFE_RELEASE(adapter);
+	SAFE_RELEASE(factory);
+
 	hr = setupBackBuffer();
 	THROW_IF_FAILED(hr);
 
 	hr = initScene();
 	THROW_IF_FAILED(hr);
 
-	m_camera = Camera{
-		.r{ 5.f },
-		.angX{ -3.5f * XM_PI / 4 },
-		.angY{  XM_PI / 6 },
-	};
-
-	SAFE_RELEASE(adapter);
-	SAFE_RELEASE(factory);
+	m_pCamera = new Camera();
+	m_pInputHandler = new InputHandler(this, m_pCamera);
 
 	{
 		// Setup Dear ImGui context
@@ -275,8 +180,8 @@ bool Renderer::resize(UINT width, UINT height) {
 
 	float r{ 1.1f * 2.0f * sqrtf(n * n + halfH * halfH + halfW * halfW) };
 
-	// rt update
-	m_pGeom->resizeUAV(m_pPostProcess->getTexture());
+	// rt update TODO
+	//m_pGeom->resizeUAV(m_pPostProcess->getTexture());
 
 	D3D11_MAPPED_SUBRESOURCE subres;
 	hr = m_pDeviceContext->Map(
@@ -289,8 +194,6 @@ bool Renderer::resize(UINT width, UINT height) {
 
 	memcpy(subres.pData, &m_rtBuffer, sizeof(RTBuffer));
 	m_pDeviceContext->Unmap(m_pRTBuffer, 0);
-
-
 
 	return SUCCEEDED(hr);
 }
@@ -305,7 +208,7 @@ bool Renderer::update() {
 	}
 
 	// move camera
-	m_camera.move((time - m_prevTime) / 1e6f);
+	m_pCamera->updatePosition((time - m_prevTime) / 1e6f);
 
 	//m_pCube->update((time - m_prevTime) / 1e6f, m_isModelRotate);
 	//m_pGeom->update((time - m_prevTime) / 1e6f, m_isModelRotate);
@@ -313,13 +216,13 @@ bool Renderer::update() {
 
 	m_prevTime = time;
 
-	Vector3 cameraPos{ m_camera.getPosition() };
+	Vector3 cameraPos{ m_pCamera->getPosition() };
 
 	// Setup camera
 	Matrix v{ XMMatrixLookAtLH(
-		m_camera.getPosition(),
-		m_camera.poi,
-		m_camera.getUp()
+		m_pCamera->getPosition(),
+		m_pCamera->getPoi(),
+		m_pCamera->getUp()
 	) };
 	m_v = v;
 
@@ -359,7 +262,8 @@ bool Renderer::update() {
 			static_cast<float>(nearPlane), static_cast<float>(farPlane),
 		};
 		(v * m_p).Invert(m_rtBuffer.pvInv);
-		m_rtBuffer.instancesIntsecalgLeafsTCheck.x = m_pCube->getInstCount();
+		// todo
+		//m_rtBuffer.instancesIntsecalgLeafsTCheck.x = m_pCube->getInstCount();
 
 		// update direction vector
 		Vector4 n = { 1.f / m_width, -1.f / m_height, 1.f / (nearPlane - farPlane), 1.f };
@@ -381,13 +285,11 @@ bool Renderer::render() {
 	m_pDeviceContext->ClearState();
 
 	ID3D11RenderTargetView* views[]{ m_pPostProcess->getBufferRTV() };
-	m_pDeviceContext->OMSetRenderTargets(1, views, m_isUseZBuffer ? m_pDepthBufferDSV : nullptr);
+	m_pDeviceContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
 
 	static const FLOAT BackColor[4]{ 0.25f, 0.25f, 0.25f, 1.0f };
 	m_pDeviceContext->ClearRenderTargetView(m_pPostProcess->getBufferRTV(), BackColor);
-	if (m_isUseZBuffer) {
-		m_pDeviceContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
-	}
+	m_pDeviceContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
 	D3D11_VIEWPORT viewport{
 		.Width{ static_cast<FLOAT>(m_width) },
@@ -406,11 +308,11 @@ bool Renderer::render() {
 	m_pDeviceContext->OMSetBlendState(m_pOpaqueBlendState, nullptr, 0xFFFFFFFF);
 
 	// CUBE
-	if (m_pCube->getIsRayTracing()) {
-		m_pCube->rayTracing(m_pSampler, m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
-		// bind render target
-		m_pDeviceContext->OMSetRenderTargets(1, views, m_isUseZBuffer ? m_pDepthBufferDSV : nullptr);
-	}
+	//if (m_pCube->getIsRayTracing()) {
+	//	m_pCube->rayTracing(m_pSampler, m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
+	//	// bind render target
+	//	m_pDeviceContext->OMSetRenderTargets(1, views, m_isUseZBuffer ? m_pDepthBufferDSV : nullptr);
+	//}
 
 	//m_pGeom->rayTracing(m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
 
@@ -426,15 +328,15 @@ bool Renderer::render() {
 
 	m_pPostProcess->render(m_pBackBufferRTV, m_pSampler);
 
-	m_pCube->readQueries();
+	//m_pCube->readQueries();
 
-	++m_frameCounter;
+	/*++m_frameCounter;
 	double bvhTime{ m_pGeom->m_pCPUTimer->getTime() };
 	m_bvhTime += bvhTime;
 	double cubeTime{ m_pCube->m_pGPUTimer->getTime() };
-	m_cubeTime += cubeTime;
+	m_cubeTime += cubeTime;*/
 
-	double currTime{ m_CPUTimer.getCurrent() };
+	/*double currTime{ m_CPUTimer.getCurrent() };
 	if (currTime > 1e3) {
 		m_fps = m_frameCounter / (currTime / 1e3);
 		m_bvhTimeAvg = m_bvhTime / m_frameCounter;
@@ -443,7 +345,7 @@ bool Renderer::render() {
 		m_cubeTime = 0;
 		m_frameCounter = 0;
 		m_CPUTimer.start();
-	}
+	}*/
 
 	// Start the Dear ImGui frame
 	ImGui_ImplDX11_NewFrame();
@@ -468,7 +370,7 @@ bool Renderer::render() {
 		ImGui::End();
 	}
 
-	{
+	/*{
 		ImGui::Begin("CubeBVH");
 
 		ImGui::Text("Split alg:");
@@ -518,7 +420,7 @@ bool Renderer::render() {
 		}
 
 		ImGui::End();
-	}
+	}*/
 
 	//{
 	//	ImGui::Begin("GeomBVH");
@@ -626,13 +528,13 @@ HRESULT Renderer::setupBackBuffer() {
 	hr = createDepthBuffer();
 	THROW_IF_FAILED(hr);
 
-	hr = SetResourceName(m_pDepthBuffer, "DepthBuffer");
+	hr = setResourceName(m_pDepthBuffer, "DepthBuffer");
 	THROW_IF_FAILED(hr);
 
 	hr = m_pDevice->CreateDepthStencilView(m_pDepthBuffer, nullptr, &m_pDepthBufferDSV);
 	THROW_IF_FAILED(hr);
 
-	hr = SetResourceName(m_pDepthBufferDSV, "DepthBufferView");
+	hr = setResourceName(m_pDepthBufferDSV, "DepthBufferView");
 	THROW_IF_FAILED(hr);
 
 	m_pPostProcess = new PostProcess(m_pDevice, m_pDeviceContext);
@@ -663,25 +565,25 @@ HRESULT Renderer::createDepthBuffer() {
 HRESULT Renderer::initScene() {
 	HRESULT hr{ S_OK };
 
-	m_pCube = new Cube(m_pDevice, m_pDeviceContext);
+	//m_pCube = new Cube(m_pDevice, m_pDeviceContext);
 
 	Matrix positions[]{
 		XMMatrixIdentity(),
 		XMMatrixTranslation(2.0f, 0.0f, 0.0f)
 	};
 
-	hr = m_pCube->init(positions, 2);
+	//hr = m_pCube->init(positions, 2);
 	THROW_IF_FAILED(hr);
 
-	m_pGeom = new Geometry(m_pDevice, m_pDeviceContext);
-	m_pGeom->init(m_pPostProcess->getTexture());
+	//m_pGeom = new Geometry(m_pDevice, m_pDeviceContext);
+	//m_pGeom->init(m_pPostProcess->getTexture());
 
 	// create scene buffer
 	{
 		hr = createSceneBuffer();
 		THROW_IF_FAILED(hr);
 
-		hr = SetResourceName(m_pSceneBuffer, "SceneBuffer");
+		hr = setResourceName(m_pSceneBuffer, "SceneBuffer");
 		THROW_IF_FAILED(hr);
 	}
 
@@ -697,7 +599,7 @@ HRESULT Renderer::initScene() {
 		hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pRTBuffer);
 		THROW_IF_FAILED(hr);
 
-		hr = SetResourceName(m_pRTBuffer, "RTBuffer");
+		hr = setResourceName(m_pRTBuffer, "RTBuffer");
 		THROW_IF_FAILED(hr);
 	}
 
@@ -706,7 +608,7 @@ HRESULT Renderer::initScene() {
 		hr = createRasterizerState();
 		THROW_IF_FAILED(hr);
 
-		hr = SetResourceName(m_pRasterizerState, "RasterizerState");
+		hr = setResourceName(m_pRasterizerState, "RasterizerState");
 		THROW_IF_FAILED(hr);
 	}
 
@@ -730,14 +632,14 @@ HRESULT Renderer::initScene() {
 		hr = m_pDevice->CreateBlendState(&desc, &m_pTransBlendState);
 		THROW_IF_FAILED(hr);
 
-		hr = SetResourceName(m_pTransBlendState, "TransBlendState");
+		hr = setResourceName(m_pTransBlendState, "TransBlendState");
 		THROW_IF_FAILED(hr);
 
 		desc.RenderTarget[0].BlendEnable = FALSE;
 		hr = m_pDevice->CreateBlendState(&desc, &m_pOpaqueBlendState);
 		THROW_IF_FAILED(hr);
 
-		hr = SetResourceName(m_pOpaqueBlendState, "OpaqueBlendState");
+		hr = setResourceName(m_pOpaqueBlendState, "OpaqueBlendState");
 		THROW_IF_FAILED(hr);
 	}
 
@@ -746,7 +648,7 @@ HRESULT Renderer::initScene() {
 		hr = createReversedDepthState();
 		THROW_IF_FAILED(hr);
 
-		hr = SetResourceName(m_pDepthState, "DephtState");
+		hr = setResourceName(m_pDepthState, "DephtState");
 		THROW_IF_FAILED(hr);
 	}
 
@@ -762,7 +664,7 @@ HRESULT Renderer::initScene() {
 		hr = m_pDevice->CreateDepthStencilState(&desc, &m_pTransDepthState);
 		THROW_IF_FAILED(hr);
 
-		hr = SetResourceName(m_pTransDepthState, "TransDepthState");
+		hr = setResourceName(m_pTransDepthState, "TransDepthState");
 		THROW_IF_FAILED(hr);
 	}
 
@@ -772,10 +674,10 @@ HRESULT Renderer::initScene() {
 		THROW_IF_FAILED(hr);
 	}
 
-	hr = m_pCube->initCull();
+	//hr = m_pCube->initCull();
 	THROW_IF_FAILED(hr);
 
-	m_pCube->rayTracingInit(m_pPostProcess->getTexture());
+	//m_pCube->rayTracingInit(m_pPostProcess->getTexture());
 
 	return hr;
 }

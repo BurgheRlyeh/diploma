@@ -1,5 +1,7 @@
 #include "PostProcess.h"
 
+#include "ShaderLoader.h"
+
 ID3D11Texture2D* PostProcess::getTexture() {
     return m_pBuffer;
 }
@@ -11,15 +13,26 @@ ID3D11RenderTargetView* PostProcess::getBufferRTV() {
 HRESULT PostProcess::init() {
     HRESULT hr{ S_OK };
 
-    //D3DReadFileToBlob("")
+    ID3DBlob* pBlob{};
+    hr = loadShaderBlob(L"PostProcessVS.cso", &pBlob);
+    THROW_IF_FAILED(hr);
 
-    hr = compileAndCreateShader(
-        m_pDevice, L"Sepia.vs", (ID3D11DeviceChild**)&m_pVertexShader
+    hr = m_pDevice->CreateVertexShader(
+        pBlob->GetBufferPointer(),
+        pBlob->GetBufferSize(),
+        nullptr,
+        &m_pVertexShader
     );
     THROW_IF_FAILED(hr);
 
-    hr = compileAndCreateShader(
-        m_pDevice, L"Sepia.ps", (ID3D11DeviceChild**)&m_pPixelShader
+    hr = loadShaderBlob(L"PostProcessPS.cso", &pBlob);
+    THROW_IF_FAILED(hr);
+
+    hr = m_pDevice->CreatePixelShader(
+        pBlob->GetBufferPointer(),
+        pBlob->GetBufferSize(),
+        nullptr,
+        &m_pPixelShader
     );
     THROW_IF_FAILED(hr);
 
@@ -30,6 +43,7 @@ void PostProcess::term() {
     SAFE_RELEASE(m_pBuffer);
     SAFE_RELEASE(m_pBufferRTV);
     SAFE_RELEASE(m_pBufferSRV);
+
     SAFE_RELEASE(m_pVertexShader);
     SAFE_RELEASE(m_pVertexShader);
 }
@@ -50,7 +64,6 @@ void PostProcess::render(
     m_pDeviceContext->OMSetDepthStencilState(nullptr, 0);
     m_pDeviceContext->RSSetState(nullptr);
     m_pDeviceContext->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
-
     m_pDeviceContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
     m_pDeviceContext->IASetInputLayout(nullptr);
     m_pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -67,32 +80,6 @@ HRESULT PostProcess::setupBuffer(int width, int height) {
 
     HRESULT hr{ S_OK };
 
-    hr = createPostProcessBuffer(width, height);
-    THROW_IF_FAILED(hr);
-
-    hr = SetResourceName(m_pBuffer, "PostProcessBuffer");
-    THROW_IF_FAILED(hr);
-
-    hr = m_pDevice->CreateRenderTargetView(
-        m_pBuffer, nullptr, &m_pBufferRTV
-    );
-    THROW_IF_FAILED(hr);
-
-    hr = SetResourceName(m_pBufferRTV, "PostProcessBufferRTV");
-    THROW_IF_FAILED(hr);
-
-    hr = m_pDevice->CreateShaderResourceView(
-        m_pBuffer, nullptr, &m_pBufferSRV
-    );
-    THROW_IF_FAILED(hr);
-
-    hr = SetResourceName(m_pBufferSRV, "PostProcessBufferSRV");
-    THROW_IF_FAILED(hr);
-
-    return hr;
-}
-
-HRESULT PostProcess::createPostProcessBuffer(int width, int height) {
     D3D11_TEXTURE2D_DESC desc{
         .Width{ static_cast<UINT>(width) },
         .Height{ static_cast<UINT>(height) },
@@ -103,6 +90,27 @@ HRESULT PostProcess::createPostProcessBuffer(int width, int height) {
         .Usage{ D3D11_USAGE_DEFAULT },
         .BindFlags{ D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS }
     };
+    hr = m_pDevice->CreateTexture2D(&desc, nullptr, &m_pBuffer);
+    THROW_IF_FAILED(hr);
 
-    return m_pDevice->CreateTexture2D(&desc, nullptr, &m_pBuffer);
+    hr = setResourceName(m_pBuffer, "PostProcessBuffer");
+    THROW_IF_FAILED(hr);
+
+    hr = m_pDevice->CreateRenderTargetView(
+        m_pBuffer, nullptr, &m_pBufferRTV
+    );
+    THROW_IF_FAILED(hr);
+
+    hr = setResourceName(m_pBufferRTV, "PostProcessBufferRTV");
+    THROW_IF_FAILED(hr);
+
+    hr = m_pDevice->CreateShaderResourceView(
+        m_pBuffer, nullptr, &m_pBufferSRV
+    );
+    THROW_IF_FAILED(hr);
+
+    hr = setResourceName(m_pBufferSRV, "PostProcessBufferSRV");
+    THROW_IF_FAILED(hr);
+
+    return hr;
 }

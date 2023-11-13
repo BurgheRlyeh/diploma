@@ -4,6 +4,11 @@
 #include "framework.h"
 #include "diploma.h"
 
+#include "Renderer.h"
+
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+
 #define MAX_LOADSTRING 100
 
 // Global Variables:
@@ -16,6 +21,13 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+
+LONG WindowWidth{ 640 };
+LONG WindowHeight{ 360 };
+
+Renderer* renderer{};
+
+bool PressedKeys[0xff]{};
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -32,9 +44,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     LoadStringW(hInstance, IDC_DIPLOMA, szWindowClass, MAX_LOADSTRING);
     MyRegisterClass(hInstance);
 
+    // Fix working folder
+    std::wstring dir;
+    dir.resize(MAX_PATH + 1);
+    GetCurrentDirectory(MAX_PATH + 1, &dir[0]);
+    size_t configPos{ dir.find(L"x64") };
+    if (configPos != std::wstring::npos) {
+        dir.resize(configPos);
+        dir += szTitle;
+        SetCurrentDirectory(dir.c_str());
+    }
+
     // Perform application initialization:
-    if (!InitInstance (hInstance, nCmdShow))
-    {
+    if (!InitInstance(hInstance, nCmdShow)) {
         return FALSE;
     }
 
@@ -43,16 +65,26 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     MSG msg;
 
     // Main message loop:
-    while (GetMessage(&msg, nullptr, 0, 0))
-    {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+    for (bool exit{}; !exit;) {
+        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg)) {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+            if (msg.message == WM_QUIT) {
+                exit = true;
+            }
+        }
+
+        if (renderer->update()) {
+            renderer->render();
         }
     }
 
-    return (int) msg.wParam;
+    renderer->term();
+    delete renderer;
+
+    return static_cast<int>(msg.wParam);
 }
 
 
@@ -62,25 +94,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 //
 //  PURPOSE: Registers the window class.
 //
-ATOM MyRegisterClass(HINSTANCE hInstance)
-{
-    WNDCLASSEXW wcex;
+ATOM MyRegisterClass(HINSTANCE hInstance) {
+	WNDCLASSEXW wcex{
+		.cbSize{ sizeof(WNDCLASSEX) },
+		.style{ CS_HREDRAW | CS_VREDRAW },
+		.lpfnWndProc{ WndProc },
+		.cbClsExtra{},
+		.cbWndExtra{},
+		.hInstance{ hInstance },
+		.hIcon{ LoadIcon(hInstance, MAKEINTRESOURCE(IDI_DIPLOMA)) },
+		.hCursor{ LoadCursor(nullptr, IDC_ARROW) },
+		.hbrBackground{ nullptr },
+		.lpszMenuName{},
+		.lpszClassName{ szWindowClass },
+		.hIconSm{ LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL)) }
+	};
 
-    wcex.cbSize = sizeof(WNDCLASSEX);
-
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_DIPLOMA));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_DIPLOMA);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
-
-    return RegisterClassExW(&wcex);
+	return RegisterClassExW(&wcex);
 }
 
 //
@@ -93,22 +123,49 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //        In this function, we save the instance handle in a global variable and
 //        create and display the main program window.
 //
-BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
-{
-   hInst = hInstance; // Store instance handle in our global variable
+BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
+    hInst = hInstance; // Store instance handle in our global variable
 
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+    HWND hWnd{ CreateWindowW(
+            szWindowClass,
+            szTitle,
+            WS_OVERLAPPEDWINDOW,
+            CW_USEDEFAULT,
+            0,
+            CW_USEDEFAULT,
+            0,
+            nullptr,
+            nullptr,
+            hInstance,
+            nullptr
+    ) };
 
-   if (!hWnd)
-   {
-      return FALSE;
-   }
+    if (!hWnd) {
+        return FALSE;
+    }
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+    renderer = new Renderer();
+    if (!renderer->init(hWnd)) {
+        delete renderer;
+        return FALSE;
+    }
 
-   return TRUE;
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
+
+    // Adjust window size
+    RECT rc{
+        .left{},
+        .top{},
+        .right{ WindowWidth },
+        .bottom{ WindowHeight }
+    };
+
+    AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, TRUE);
+
+    MoveWindow(hWnd, 100, 100, rc.right - rc.left, rc.bottom - rc.top, TRUE);
+
+    return TRUE;
 }
 
 //
@@ -121,38 +178,57 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //  WM_DESTROY  - post a quit message and return
 //
 //
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    switch (message)
-    {
-    case WM_COMMAND:
-        {
-            int wmId = LOWORD(wParam);
-            // Parse the menu selections:
-            switch (wmId)
-            {
-            case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-                break;
-            case IDM_EXIT:
-                DestroyWindow(hWnd);
-                break;
-            default:
-                return DefWindowProc(hWnd, message, wParam, lParam);
-            }
-        }
-        break;
-    case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            // TODO: Add any drawing code that uses hdc here...
-            EndPaint(hWnd, &ps);
-        }
-        break;
-    case WM_DESTROY:
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam)) {
+        return true;
+    }
+
+    if (message == WM_DESTROY) {
         PostQuitMessage(0);
+        return 0;
+    }
+
+    if (!renderer) {
+        return DefWindowProc(hWnd, message, wParam, lParam);
+    }
+
+    switch (message) {
+    case WM_SIZE:
+        RECT rc;
+        GetClientRect(hWnd, &rc);
+        renderer->resize(rc.right - rc.left, rc.bottom - rc.top);
         break;
+
+    case WM_RBUTTONDOWN:
+        renderer->m_pInputHandler->mouseRBPressed(true, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        break;
+
+    case WM_RBUTTONUP:
+        renderer->m_pInputHandler->mouseRBPressed(false, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        break;
+
+    case WM_MOUSEMOVE:
+        renderer->m_pInputHandler->mouseMoved(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        break;
+
+    case WM_MOUSEWHEEL:
+        renderer->m_pInputHandler->mouseWheel(GET_WHEEL_DELTA_WPARAM(wParam));
+        break;
+
+    case WM_KEYDOWN:
+        if (!PressedKeys[wParam]) {
+            renderer->m_pInputHandler->keyPressed((int)wParam);
+            PressedKeys[wParam] = true;
+        }
+        break;
+
+    case WM_KEYUP:
+        if (PressedKeys[wParam]) {
+            renderer->m_pInputHandler->keyReleased((int)wParam);
+            PressedKeys[wParam] = false;
+        }
+        break;
+
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
