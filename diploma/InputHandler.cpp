@@ -15,14 +15,17 @@ void InputHandler::mouseMoved(int x, int y) {
 		return;
 	}
 
-	camera->rotate(x - prevMouseX, y - prevMouseY);
+	camera->rotate(
+		static_cast<float>(x - prevMouseX),
+		static_cast<float>(y - prevMouseY)
+	);
 
 	prevMouseX = x;
 	prevMouseY = y;
 }
 
 void InputHandler::mouseWheel(int delta) {
-	camera->zoom(delta);
+	camera->zoom(static_cast<float>(delta));
 }
 
 void InputHandler::keyPressed(int keyCode) {

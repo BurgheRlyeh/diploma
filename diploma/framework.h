@@ -66,3 +66,27 @@ inline std::wstring extension(const std::wstring& filename) {
     size_t dotPos{ filename.rfind(L'.') };
     return dotPos != std::wstring::npos ? filename.substr(dotPos + 1) : L"";
 }
+
+inline std::wstring getCurrDir() {
+    std::wstring dir;
+    dir.resize(MAX_PATH + 1);
+    GetCurrentDirectory(MAX_PATH + 1, &dir[0]);
+    dir.resize(dir.find(L'\0'));
+    return dir;
+}
+
+inline std::wstring getOutDir() {
+#ifdef _WIN64
+    std::wstring archDir{ L"x64" };
+#else
+    std::wstring archDir{ L"Win32" };
+#endif // _WIN64
+
+#ifdef _DEBUG
+    std::wstring buildDir{ L"Debug" };
+#else
+    std::wstring buildDir{ L"Release" };
+#endif // _DEBUG
+
+    return getCurrDir() + L"\\" + archDir + L"\\" + buildDir;
+}

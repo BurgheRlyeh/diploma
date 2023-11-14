@@ -76,9 +76,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
         }
 
-        if (renderer->update()) {
-            renderer->render();
-        }
+        renderer->update();
+        renderer->render();
     }
 
     renderer->term();

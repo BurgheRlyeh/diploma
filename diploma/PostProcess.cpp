@@ -40,37 +40,12 @@ HRESULT PostProcess::init() {
 }
 
 void PostProcess::term() {
-    SAFE_RELEASE(m_pBuffer);
-    SAFE_RELEASE(m_pBufferRTV);
     SAFE_RELEASE(m_pBufferSRV);
+    SAFE_RELEASE(m_pBufferRTV);
+    SAFE_RELEASE(m_pBuffer);
 
+    SAFE_RELEASE(m_pPixelShader);
     SAFE_RELEASE(m_pVertexShader);
-    SAFE_RELEASE(m_pVertexShader);
-}
-
-void PostProcess::render(
-    ID3D11RenderTargetView* m_pBackBufferRTV,
-    ID3D11SamplerState* m_pSampler
-) {
-    ID3D11RenderTargetView* views[] = { m_pBackBufferRTV };
-    m_pDeviceContext->OMSetRenderTargets(1, views, nullptr);
-
-    ID3D11SamplerState* samplers[] = { m_pSampler };
-    m_pDeviceContext->PSSetSamplers(0, 1, samplers);
-
-    ID3D11ShaderResourceView* resources[] = { m_pBufferSRV };
-    m_pDeviceContext->PSSetShaderResources(0, 1, resources);
-
-    m_pDeviceContext->OMSetDepthStencilState(nullptr, 0);
-    m_pDeviceContext->RSSetState(nullptr);
-    m_pDeviceContext->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
-    m_pDeviceContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
-    m_pDeviceContext->IASetInputLayout(nullptr);
-    m_pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_pDeviceContext->VSSetShader(m_pVertexShader, nullptr, 0);
-    m_pDeviceContext->PSSetShader(m_pPixelShader, nullptr, 0);
-
-    m_pDeviceContext->Draw(3, 0);
 }
 
 HRESULT PostProcess::setupBuffer(int width, int height) {
@@ -113,4 +88,29 @@ HRESULT PostProcess::setupBuffer(int width, int height) {
     THROW_IF_FAILED(hr);
 
     return hr;
+}
+
+void PostProcess::render(
+    ID3D11RenderTargetView* pBackBufferRTV,
+    ID3D11SamplerState* pSampler
+) {
+    ID3D11RenderTargetView* views[] = { pBackBufferRTV };
+    m_pDeviceContext->OMSetRenderTargets(1, views, nullptr);
+
+    ID3D11SamplerState* samplers[] = { pSampler };
+    m_pDeviceContext->PSSetSamplers(0, 1, samplers);
+
+    ID3D11ShaderResourceView* resources[] = { m_pBufferSRV };
+    m_pDeviceContext->PSSetShaderResources(0, 1, resources);
+
+    m_pDeviceContext->OMSetDepthStencilState(nullptr, 0);
+    m_pDeviceContext->RSSetState(nullptr);
+    m_pDeviceContext->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+    m_pDeviceContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+    m_pDeviceContext->IASetInputLayout(nullptr);
+    m_pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_pDeviceContext->VSSetShader(m_pVertexShader, nullptr, 0);
+    m_pDeviceContext->PSSetShader(m_pPixelShader, nullptr, 0);
+
+    m_pDeviceContext->Draw(3, 0);
 }
