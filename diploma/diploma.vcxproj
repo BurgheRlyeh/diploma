@@ -162,6 +162,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="CSVGeometryLoader.h" />
     <ClInclude Include="diploma.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="InputHandler.h" />
@@ -173,6 +174,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="CSVGeometryLoader.cpp" />
     <ClCompile Include="diploma.cpp" />
     <ClCompile Include="InputHandler.cpp" />
     <ClCompile Include="PostProcess.cpp" />

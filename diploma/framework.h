@@ -17,9 +17,12 @@
 #include <malloc.h>
 #include <memory.h>
 #include <tchar.h>
+#include <assert.h>
 
 // C++ RunTime Header Files
+#include <exception>
 #include <string>
+#include <vector>
 
 // DirectX
 #pragma comment(lib, "dxgi.lib")
