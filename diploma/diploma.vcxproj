@@ -90,7 +90,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui; $(SolutionDir)\utils\CSVReader;</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -109,7 +109,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui; $(SolutionDir)\utils\CSVReader;</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -128,7 +128,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui; $(SolutionDir)\utils\CSVReader;</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -147,7 +147,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\utils\DirectXTK\inc; $(SolutionDir)\utils\ImGui; $(SolutionDir)\utils\CSVReader;</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -216,6 +216,9 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\utils\CSVReader\CSVReader.vcxproj">
+      <Project>{a97bb818-9580-4639-8f19-049711241101}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\utils\DirectXTK\DirectXTK_Desktop_2022.vcxproj">
       <Project>{e0b52ae7-e160-4d32-bf3f-910b785e5a8e}</Project>
     </ProjectReference>
