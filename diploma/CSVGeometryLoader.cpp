@@ -1,5 +1,6 @@
-#include "CSVGeometryLoader.h"
 #include <charconv>
+
+#include "CSVGeometryLoader.h"
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -21,9 +22,9 @@ CSVGeometryLoader CSVGeometryLoader::loadFrom(const std::string& filepath) {
 	int tv{};
 	int iter{};
 	for (auto& row : CSVIterator(file)) {
-		if (iter > 10) {
+		/*if (iter++ > 12) {
 			break;
-		}
+		}*/
 		int id{};
 		Vector4 vertex{};
 		try {

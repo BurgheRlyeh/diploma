@@ -11149,7 +11149,7 @@ static bool ImGui::NavScoreItem(ImGuiNavItemData* result)
     if (debug_hovering || debug_tty)
     {
         ImFormatString(buf, IM_ARRAYSIZE(buf),
-            "d-box    (%7.3f,%7.3f) -> %7.3f\nd-center (%7.3f,%7.3f) -> %7.3f\nd-axial  (%7.3f,%7.3f) -> %7.3f\nnav %c, quadrant %c",
+            "d-box    (%7.3f,%7.3f) -> %7.3f\nd-ctr (%7.3f,%7.3f) -> %7.3f\nd-axial  (%7.3f,%7.3f) -> %7.3f\nnav %c, quadrant %c",
             dbx, dby, dist_box, dcx, dcy, dist_center, dax, day, dist_axial, "-WENS"[move_dir + 1], "-WENS"[quadrant + 1]);
         if (debug_hovering)
         {
@@ -13920,7 +13920,7 @@ void ImGui::ShowMetricsWindow(bool* p_open)
     // Basic info
     Text("Dear ImGui %s", GetVersion());
     Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-    Text("%d vertices, %d indices (%d triangles)", io.MetricsRenderVertices, io.MetricsRenderIndices, io.MetricsRenderIndices / 3);
+    Text("%d vertices, %d indices (%d tris)", io.MetricsRenderVertices, io.MetricsRenderIndices, io.MetricsRenderIndices / 3);
     Text("%d visible windows, %d current allocations", io.MetricsRenderWindows, g.DebugAllocInfo.TotalAllocCount - g.DebugAllocInfo.TotalFreeCount);
     //SameLine(); if (SmallButton("GC")) { g.GcCompactAll = true; }
 

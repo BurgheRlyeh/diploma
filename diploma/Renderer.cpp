@@ -211,7 +211,7 @@ bool Renderer::resize(UINT width, UINT height) {
 	THROW_IF_FAILED(hr);
 
 	// rt update TODO
-	//m_pGeom->resizeUAV(m_pPostProcess->getTexture());
+	m_pGeom->resizeUAV(m_pPostProcess->getTexture());
 
 	D3D11_MAPPED_SUBRESOURCE subres;
 	hr = m_pDeviceContext->Map(
@@ -221,6 +221,8 @@ bool Renderer::resize(UINT width, UINT height) {
 
 	m_rtBuffer.whnf.x = static_cast<FLOAT>(m_width);
 	m_rtBuffer.whnf.y = static_cast<FLOAT>(m_height);
+	m_rtBuffer.whnf.z = m_near;
+	m_rtBuffer.whnf.w = m_far;
 
 	memcpy(subres.pData, &m_rtBuffer, sizeof(RTBuffer));
 	m_pDeviceContext->Unmap(m_pRTBuffer, 0);
@@ -242,7 +244,7 @@ void Renderer::update() {
 
 	//m_pCube->update((time - m_prevTime) / 1e6f, m_isModelRotate);
 	//m_pGeom->update((time - m_prevTime) / 1e6f, m_isModelRotate);
-	//m_pGeom->updateBVH(true);
+	m_pGeom->updateBVH();
 
 	m_prevTime = time;
 
@@ -328,7 +330,8 @@ bool Renderer::render() {
 	//	m_pDeviceContext->OMSetRenderTargets(1, views, m_isUseZBuffer ? m_pDepthBufferDSV : nullptr);
 	//}
 
-	//m_pGeom->rayTracing(m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
+	m_pGeom->rayTracing(m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
+	m_pDeviceContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
 
 	// CUBE END
 
@@ -366,78 +369,26 @@ bool Renderer::render() {
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	{
-		ImGui::Begin("Stats");
-
-		ImGui::Text("FPS: %.1f", m_fps);
-
-		ImGui::Text("");
-
-		ImGui::Text("AVG CubeBVH time (ms): %.3f", m_bvhTimeAvg);
-		ImGui::Text("AVG Cube time (ms): %.3f", m_cubeTimeAvg);
-
-		ImGui::Text("");
-
-		ImGui::Text("Width: %d", m_width);
-		ImGui::Text("Height: %d", m_height);
-
-		ImGui::End();
-	}
-
-	/*{
-		ImGui::Begin("CubeBVH");
-
-		ImGui::Text("Split alg:");
-
-		bool isSAH{ m_pCube->bvh.isSAH };
-		ImGui::Checkbox("SAH", &isSAH);
-		if (m_pCube->bvh.isSAH != isSAH) {
-			m_pCube->bvh.isSAH = isSAH;
-			m_pCube->updateBVH(true);
-		}
-
-		if (isSAH) {
-			bool isStepSAH{ m_pCube->bvh.isStepSAH };
-			ImGui::Checkbox("SAH, fixed planes", &isStepSAH);
-			if (m_pCube->bvh.isStepSAH != isStepSAH) {
-				m_pCube->bvh.isStepSAH = isStepSAH;
-				m_pCube->updateBVH(true);
-			}
-
-			if (isStepSAH) {
-				bool isBinsSAH{ m_pCube->bvh.isBinsSAH };
-				ImGui::Checkbox("dynamic SAH, fixed planes", &isBinsSAH);
-				if (m_pCube->bvh.isBinsSAH != isBinsSAH) {
-					m_pCube->bvh.isBinsSAH = isBinsSAH;
-					m_pCube->updateBVH(true);
-				}
-			}
-		}
-
-		ImGui::Text(" ");
-		ImGui::Text("Stats:");
-
-		ImGui::Text("Cubes: %d", m_pCube->bvh.cnt);
-		ImGui::Text("Nodes: %d", m_pCube->bvh.nodesUsed);
-		ImGui::Text("Primitives: %d", m_pCube->bvh.cnt * 12);
-		ImGui::Text("Leafs: %d", m_pCube->bvh.leafs);
-		ImGui::Text("Average prims per leaf: %.3f", 12.0 * m_pCube->bvh.cnt / m_pCube->bvh.leafs);
-		ImGui::Text("Depth: %d ... %d", m_pCube->bvh.depthMin, m_pCube->bvh.depthMax);
-
-		ImGui::Text("");
-
-		if (m_pCube->bvh.isStepSAH) {
-			ImGui::DragInt("SAH planes", &m_pCube->bvh.sahStep, 1, 2, 25);
-		}
-		else if (!m_pCube->bvh.isSAH) {
-			ImGui::DragInt("ppl", &m_pCube->bvh.trianglesPerLeaf, 1, 1, 12);
-		}
-
-		ImGui::End();
-	}*/
-
 	//{
-	//	ImGui::Begin("GeomBVH");
+	//	ImGui::Begin("Stats");
+
+	//	ImGui::Text("FPS: %.1f", m_fps);
+
+	//	ImGui::Text("");
+
+	//	ImGui::Text("AVG CubeBVH time (ms): %.3f", m_bvhTimeAvg);
+	//	ImGui::Text("AVG Cube time (ms): %.3f", m_cubeTimeAvg);
+
+	//	ImGui::Text("");
+
+	//	ImGui::Text("Width: %d", m_width);
+	//	ImGui::Text("Height: %d", m_height);
+
+	//	ImGui::End();
+	//}
+
+	{
+		ImGui::Begin("GeomBVH");
 
 	//	ImGui::Text("Split alg:");
 
@@ -466,60 +417,72 @@ bool Renderer::render() {
 	//		}
 	//	}
 
-	//	ImGui::Text(" ");
-	//	ImGui::Text("Stats:");
+		//ImGui::Text(" ");
+		ImGui::Text("Stats:");
 
-	//	ImGui::Text("Geoms: %d", m_pGeom->bvh.cnt);
-	//	ImGui::Text("Nodes: %d", m_pGeom->bvh.nodesUsed);
-	//	ImGui::Text("Primitives: %d", m_pGeom->bvh.cnt * 1107);
-	//	ImGui::Text("Leafs: %d", m_pGeom->bvh.leafs);
-	//	ImGui::Text("Average prims per leaf: %.3f", 1107.0 / m_pGeom->bvh.leafs);
-	//	ImGui::Text("Depth: %d ... %d", m_pGeom->bvh.depthMin, m_pGeom->bvh.depthMax);
+		//ImGui::Text("Geoms: %d", m_pGeom->bvh.cnt);
+		ImGui::Text("Nodes: %d", m_pGeom->bvh.nodesUsed);
 
-	//	ImGui::Text("");
+		Vector3 pos = m_pCamera->getPosition();
+		ImGui::Text("Camera.pos.x: %f", pos.x);
+		ImGui::Text("Camera.pos.y: %f", pos.y);
+		ImGui::Text("Camera.pos.z: %f", pos.z);
 
-	//	if (m_pGeom->bvh.isStepSAH) {
-	//		ImGui::DragInt("SAH planes", &m_pGeom->bvh.sahStep, 1, 2, 32);
-	//	}
-	//	else if (!m_pGeom->bvh.isSAH) {
-	//		ImGui::DragInt("ppl", &m_pGeom->bvh.trianglesPerLeaf, 1, 1, 12);
-	//	}
+		Vector3 poi = m_pCamera->getPoi();
+		ImGui::Text("Camera.poi.x: %f", poi.x);
+		ImGui::Text("Camera.poi.y: %f", poi.y);
+		ImGui::Text("Camera.poi.z: %f", poi.z);
 
-	//	ImGui::End();
-	//}
 
-	{
-		ImGui::Begin("RT");
+		//ImGui::Text("Primitives: %d", m_pGeom->bvh.cnt * 1107);
+		//ImGui::Text("Leafs: %d", m_pGeom->bvh.leafs);
+		//ImGui::Text("Average prims per leaf: %.3f", 1107.0 / m_pGeom->bvh.leafs);
+		//ImGui::Text("Depth: %d ... %d", m_pGeom->bvh.depthMin, m_pGeom->bvh.depthMax);
 
-		bool intsecStackless{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 0 };
-		bool intsecStack{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 1 };
-		bool intsecNaive{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 2 };
+		//ImGui::Text("");
 
-		ImGui::Checkbox("Stackless intersection", &intsecStackless);
-		ImGui::Checkbox("Stack intersection", &intsecStack);
-		ImGui::Checkbox("Naive intersection", &intsecNaive);
-
-		if (m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 0)
-			m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStack ? 1 : (intsecNaive ? 2 : 0);
-		else if (m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 1)
-			m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStackless ? 0 : (intsecNaive ? 2 : 1);
-		else
-			m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStackless ? 0 : (intsecStack ? 1 : 2);
-
-		ImGui::Text(" ");
-
-		ImGui::Text("Stackless settings:");
-
-		bool notProcLeafs{ m_rtBuffer.instancesIntsecalgLeafsTCheck.z == 1 };
-		ImGui::Checkbox("Not process leafs", &notProcLeafs);
-		m_rtBuffer.instancesIntsecalgLeafsTCheck.z = notProcLeafs ? 1 : 0;
-
-		bool checkT{ m_rtBuffer.instancesIntsecalgLeafsTCheck.w == 1 };
-		ImGui::Checkbox("Check T", &checkT);
-		m_rtBuffer.instancesIntsecalgLeafsTCheck.w = checkT ? 1 : 0;
+		//if (m_pGeom->bvh.isStepSAH) {
+		//	ImGui::DragInt("SAH planes", &m_pGeom->bvh.sahStep, 1, 2, 32);
+		//}
+		//else if (!m_pGeom->bvh.isSAH) {
+		//	ImGui::DragInt("ppl", &m_pGeom->bvh.trianglesPerLeaf, 1, 1, 12);
+		//}
 
 		ImGui::End();
 	}
+
+	//{
+	//	ImGui::Begin("RT");
+
+	//	bool intsecStackless{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 0 };
+	//	bool intsecStack{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 1 };
+	//	bool intsecNaive{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 2 };
+
+	//	ImGui::Checkbox("Stackless intersection", &intsecStackless);
+	//	ImGui::Checkbox("Stack intersection", &intsecStack);
+	//	ImGui::Checkbox("Naive intersection", &intsecNaive);
+
+	//	if (m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 0)
+	//		m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStack ? 1 : (intsecNaive ? 2 : 0);
+	//	else if (m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 1)
+	//		m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStackless ? 0 : (intsecNaive ? 2 : 1);
+	//	else
+	//		m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStackless ? 0 : (intsecStack ? 1 : 2);
+
+	//	ImGui::Text(" ");
+
+	//	ImGui::Text("Stackless settings:");
+
+	//	bool notProcLeafs{ m_rtBuffer.instancesIntsecalgLeafsTCheck.z == 1 };
+	//	ImGui::Checkbox("Not process leafs", &notProcLeafs);
+	//	m_rtBuffer.instancesIntsecalgLeafsTCheck.z = notProcLeafs ? 1 : 0;
+
+	//	bool checkT{ m_rtBuffer.instancesIntsecalgLeafsTCheck.w == 1 };
+	//	ImGui::Checkbox("Check T", &checkT);
+	//	m_rtBuffer.instancesIntsecalgLeafsTCheck.w = checkT ? 1 : 0;
+
+	//	ImGui::End();
+	//}
 
 	// Rendering
 	ImGui::Render();
@@ -666,6 +629,8 @@ HRESULT Renderer::initScene() {
 	}
 
 	//hr = m_pCube->initCull();
+	m_pGeom = new Geometry(m_pDevice, m_pDeviceContext);
+	hr = m_pGeom->init(m_pPostProcess->getTexture());
 	THROW_IF_FAILED(hr);
 
 	//m_pCube->rayTracingInit(m_pPostProcess->getTexture());
@@ -674,6 +639,7 @@ HRESULT Renderer::initScene() {
 }
 
 void Renderer::termScene() {
+	m_pGeom->term();
 	m_pPostProcess->term();
 
 	SAFE_RELEASE(m_pSampler);

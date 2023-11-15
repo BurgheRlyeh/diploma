@@ -22,8 +22,8 @@ BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
-LONG WindowWidth{ 640 };
-LONG WindowHeight{ 360 };
+LONG WindowWidth{ 1280 };
+LONG WindowHeight{ 720 };
 
 Renderer* renderer{};
 
@@ -49,9 +49,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     dir.resize(MAX_PATH + 1);
     GetCurrentDirectory(MAX_PATH + 1, &dir[0]);
     size_t configPos{ dir.find(L"x64") };
-    if (configPos != std::wstring::npos) {
-        dir.resize(configPos);
-        dir += szTitle;
+    if (configPos == std::wstring::npos) {
+        dir = getOutDir();
         SetCurrentDirectory(dir.c_str());
     }
 

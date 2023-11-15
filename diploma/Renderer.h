@@ -7,15 +7,21 @@
 #include "Camera.h"
 #include "InputHandler.h"
 #include "PostProcess.h"
+#include "Geometry.h"
 
 class Camera;
 class InputHandler;
 class PostProcess;
+class Geometry;
 
 class Renderer {
 	const FLOAT m_near{ 0.1f };
 	const FLOAT m_far{ 100.f };
 	const FLOAT m_fov{ DirectX::XM_PI / 3.f };
+
+	// window size
+	UINT m_width{ 16 };
+	UINT m_height{ 9 };
 
 	ID3D11Device* m_pDevice{};
 	ID3D11DeviceContext* m_pDeviceContext{};
@@ -35,7 +41,9 @@ class Renderer {
 	ID3D11Buffer* m_pSceneBuffer{};
 
 	struct RTBuffer {
-		DirectX::SimpleMath::Vector4 whnf{};
+		DirectX::SimpleMath::Vector4 whnf{
+			16.f, 9.f, 0.1f, 100.f
+		};
 		DirectX::SimpleMath::Matrix pvInv{};
 		DirectX::XMINT4 instancesIntsecalgLeafsTCheck{ 1, 0, 0, 1 };
 		DirectX::SimpleMath::Vector4 camDir{};
@@ -56,10 +64,7 @@ class Renderer {
 	// other classes
 	PostProcess* m_pPostProcess{};
 	Camera* m_pCamera{};
-
-	// window size
-	UINT m_width{ 16 };
-	UINT m_height{ 9 };
+	Geometry* m_pGeom{};
 
 	size_t m_prevTime{};
 

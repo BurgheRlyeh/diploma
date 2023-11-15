@@ -3,9 +3,9 @@
 #include "framework.h"
 
 class Camera {
-	const float ROTATE_COEF{ DirectX::XM_2PI / 1e3f };
+	const float ROTATE_COEF{ 1.f / 1e3f };
 	const float MOVE_COEF{ 2.0f };
-	const float ZOOM_COEF{ 1e-2f };
+	const float ZOOM_COEF{ 1.f / 100.f };
 
 	DirectX::SimpleMath::Vector3 m_poi{};
 

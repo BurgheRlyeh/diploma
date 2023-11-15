@@ -14,7 +14,10 @@ HRESULT PostProcess::init() {
     HRESULT hr{ S_OK };
 
     ID3DBlob* pBlob{};
-    hr = loadShaderBlob(L"PostProcessVS.cso", &pBlob);
+    //hr = loadShaderBlob(L"PostProcessVS.cso", &pBlob);
+
+    std::wstring filepath{ L"PostProcessVS.cso" };
+    hr = D3DReadFileToBlob(filepath.c_str(), &pBlob);
     THROW_IF_FAILED(hr);
 
     hr = m_pDevice->CreateVertexShader(
@@ -25,7 +28,9 @@ HRESULT PostProcess::init() {
     );
     THROW_IF_FAILED(hr);
 
-    hr = loadShaderBlob(L"PostProcessPS.cso", &pBlob);
+    //hr = loadShaderBlob(L"PostProcessPS.cso", &pBlob);
+    filepath = L"PostProcessPS.cso";
+    hr = D3DReadFileToBlob(filepath.c_str(), &pBlob);
     THROW_IF_FAILED(hr);
 
     hr = m_pDevice->CreatePixelShader(
