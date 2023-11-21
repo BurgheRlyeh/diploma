@@ -181,6 +181,7 @@
     <ClInclude Include="Timer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BVH.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CSVGeometryLoader.cpp" />
     <ClCompile Include="diploma.cpp" />
