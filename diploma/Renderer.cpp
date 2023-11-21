@@ -372,33 +372,33 @@ bool Renderer::render() {
 
 		ImGui::Text("Split algorithm:");
 
-		bool isDichotomy{ m_pGeom->bvh.alg == 0 };
+		bool isDichotomy{ m_pGeom->bvh.m_alg == 0 };
 		ImGui::Checkbox("Dichotomy", &isDichotomy);
 		if (isDichotomy) {
-			m_pGeom->bvh.alg = 0;
-			ImGui::DragInt("Primitives per leaf", &m_pGeom->bvh.primsPerLeaf, 1, 2, 32);
+			m_pGeom->bvh.m_alg = 0;
+			ImGui::DragInt("Primitives per leaf", &m_pGeom->bvh.m_primsPerLeaf, 1, 2, 32);
 		}
 
-		bool isSAH{ m_pGeom->bvh.alg == 1 };
+		bool isSAH{ m_pGeom->bvh.m_alg == 1 };
 		ImGui::Checkbox("SAH", &isSAH);
 		if (isSAH) {
-			m_pGeom->bvh.alg = 1;
+			m_pGeom->bvh.m_alg = 1;
 		}
 
-		bool isFixedStepSAH{ m_pGeom->bvh.alg == 2 };
+		bool isFixedStepSAH{ m_pGeom->bvh.m_alg == 2 };
 		ImGui::Checkbox("FixedStepSAH", &isFixedStepSAH);
 		if (isFixedStepSAH) {
-			m_pGeom->bvh.alg = 2;
+			m_pGeom->bvh.m_alg = 2;
 		}
 
-		bool isBinnedSAH{ m_pGeom->bvh.alg == 3 };
+		bool isBinnedSAH{ m_pGeom->bvh.m_alg == 3 };
 		ImGui::Checkbox("BinnedSAH", &isBinnedSAH);
 		if (isBinnedSAH) {
-			m_pGeom->bvh.alg = 3;
+			m_pGeom->bvh.m_alg = 3;
 		}
 
 		if (isFixedStepSAH || isBinnedSAH) {
-			ImGui::DragInt("SAH step", &m_pGeom->bvh.sahStep, 1, 2, 32);
+			ImGui::DragInt("SAH step", &m_pGeom->bvh.m_sahSteps, 1, 2, 32);
 		}
 
 		ImGui::Text(" ");
@@ -407,14 +407,14 @@ bool Renderer::render() {
 
 		ImGui::Text("Average BVH time (ms): %.3f", m_geomCPUAvgTime);
 		ImGui::Text(" ");
-		ImGui::Text("Nodes: %d", m_pGeom->bvh.nodesUsed);
-		ImGui::Text("Leafs: %d", m_pGeom->bvh.leafs);
+		ImGui::Text("Nodes: %d", m_pGeom->bvh.m_nodesUsed);
+		ImGui::Text("Leafs: %d", m_pGeom->bvh.m_leafs);
 		ImGui::Text(" ");
-		ImGui::Text("Primitives: %d", m_pGeom->bvh.triCnt);
-		ImGui::Text("Average primitives per leaf: %.3f", 1.f * m_pGeom->bvh.triCnt / m_pGeom->bvh.leafs);
+		ImGui::Text("Primitives: %d", m_pGeom->bvh.m_triCnt);
+		ImGui::Text("Average primitives per leaf: %.3f", 1.f * m_pGeom->bvh.m_triCnt / m_pGeom->bvh.m_leafs);
 		ImGui::Text(" ");
-		ImGui::Text("Min depth: %d", m_pGeom->bvh.depthMin);
-		ImGui::Text("Max depth: %d", m_pGeom->bvh.depthMax);
+		ImGui::Text("Min depth: %d", m_pGeom->bvh.m_depthMin);
+		ImGui::Text("Max depth: %d", m_pGeom->bvh.m_depthMax);
 
 		ImGui::End();
 	}
@@ -444,7 +444,7 @@ bool Renderer::render() {
 			ImGui::Text(" ");
 
 			bool isProcessLeafs{ m_rtBuffer.instsAlgLeafsTCheck.z == 1 };
-			ImGui::Checkbox("Process leafs", &isProcessLeafs);
+			ImGui::Checkbox("Process m_leafs", &isProcessLeafs);
 			m_rtBuffer.instsAlgLeafsTCheck.z = isProcessLeafs ? 1 : 0;
 
 			bool isTCheck{ m_rtBuffer.instsAlgLeafsTCheck.w == 1 };
