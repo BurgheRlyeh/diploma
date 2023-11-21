@@ -77,7 +77,7 @@ class Renderer {
 	double m_prevSec{};
 
 	// framerate
-	UINT m_frameCounter{};
+	UINT m_frameCnt{};
 	double m_fps{};
 
 

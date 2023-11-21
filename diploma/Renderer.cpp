@@ -238,6 +238,9 @@ void Renderer::update() {
 	// move camera
 	m_pCamera->updatePosition((time - m_prevTime) / 1e3f);
 
+	// update models
+	m_pGeom->update((time - m_prevTime) / 1e3f, m_isModelRotate);
+
 	m_prevTime = time;
 
 	Vector3 cameraPos{ m_pCamera->getPosition() };
@@ -330,20 +333,20 @@ bool Renderer::render() {
 
 	m_pPostProcess->render(m_pBackBufferRTV, m_pSampler);
 
-	++m_frameCounter;
+	++m_frameCnt;
 	double time{ m_CPUTimer.curr() };
 	if (time - m_prevSec > 1e3) {
-		m_fps = 1e3 * m_frameCounter / (time - m_prevSec);
+		m_fps = 1e3 * m_frameCnt / (time - m_prevSec);
 		m_prevSec = time;
 
 		double bvhTimeAvg{ m_pGeom->m_pCPUTimer->getAcc() };
 		if (bvhTimeAvg)
-			m_geomCPUAvgTime = bvhTimeAvg / m_frameCounter;
+			m_geomCPUAvgTime = bvhTimeAvg / m_frameCnt;
 		
 		
-		m_geomGPUAvgTime = m_pGeom->m_pGPUTimer->getAcc() / m_frameCounter;
+		m_geomGPUAvgTime = m_pGeom->m_pGPUTimer->getAcc() / m_frameCnt;
 
-		m_frameCounter = 0;
+		m_frameCnt = 0;
 	}
 
 	// Start the Dear ImGui frame

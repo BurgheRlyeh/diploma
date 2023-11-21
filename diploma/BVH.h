@@ -20,57 +20,56 @@ public:
 		AABB bb{};
 		XMINT4 leftCntPar{};
 	};
-	std::vector<BVHNode> nodes{};
-	std::vector<XMINT4> triIds{};
+	std::vector<BVHNode> m_nodes{};
+	std::vector<XMINT4> m_triIds{};
 
 private:
 	struct Triangle {
 		Vector4 v0{}, v1{}, v2{};
 		Vector4 ctr{};
 	};
-	std::vector<Triangle> tris{};
+	std::vector<Triangle> m_tris{};
 
 public:
-	INT triCnt{};
+	INT m_triCnt{};
 
-	INT nodesUsed{ 1 };
-	INT leafs{};
-	INT depthMin{ 2 * 1107 - 1 };
-	INT depthMax{ -1 };
+	INT m_nodesUsed{ 1 };
+	INT m_leafs{};
+	INT m_depthMin{ 2 * 1107 - 1 };
+	INT m_depthMax{ -1 };
 
-	INT alg{ 3 };
-	INT primsPerLeaf{ 2 };
-	INT sahStep{ 8 };
-
+	INT m_alg{ 3 };
+	INT m_primsPerLeaf{ 2 };
+	INT m_sahSteps{ 8 };
 
 	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
-		triCnt = idsCnt;
+		m_triCnt = idsCnt;
 
-		nodesUsed = 1;
-		leafs = 0;
-		depthMin = 2 * triCnt - 1;
-		depthMax = -1;
+		m_nodesUsed = 1;
+		m_leafs = 0;
+		m_depthMin = 2 * m_triCnt - 1;
+		m_depthMax = -1;
 
-		tris.resize(triCnt);
-		triIds.resize(triCnt);
-		nodes.resize(2 * triCnt - 1);
+		m_tris.resize(m_triCnt);
+		m_triIds.resize(m_triCnt);
+		m_nodes.resize(2 * m_triCnt - 1);
 
-		for (INT i{}; i < triCnt; ++i) {
-			tris[i] = {
+		for (INT i{}; i < m_triCnt; ++i) {
+			m_tris[i] = {
 				Vector4::Transform(vts[ids[i].x], modelMatrix),
 				Vector4::Transform(vts[ids[i].y], modelMatrix),
 				Vector4::Transform(vts[ids[i].z], modelMatrix)
 			};
-			tris[i].ctr = (tris[i].v0 + tris[i].v1 + tris[i].v2) / 3.f;
+			m_tris[i].ctr = (m_tris[i].v0 + m_tris[i].v1 + m_tris[i].v2) / 3.f;
 
-			triIds[i] = { i, 0, 0, 0 };
+			m_triIds[i] = { i, 0, 0, 0 };
 		}
 	}
 
 	void build() {
-		BVHNode& root = nodes[0];
+		BVHNode& root = m_nodes[0];
 		root.leftCntPar = {
-			0, triCnt, -1, 0
+			0, m_triCnt, -1, 0
 		};
 		updateNodeBounds(0);
 		subdivide(0);
@@ -79,9 +78,9 @@ public:
 private:
 	void updateDepths(INT id) {
 		int d{};
-		for (; id != 0; id = nodes[id].leftCntPar.z) ++d;
-		depthMin = std::min(depthMin, d);
-		depthMax = std::max(depthMax, d);
+		for (; id != 0; id = m_nodes[id].leftCntPar.z) ++d;
+		m_depthMin = std::min(m_depthMin, d);
+		m_depthMax = std::max(m_depthMax, d);
 	}
 
 	float comp(Vector4 v, INT idx) {
@@ -95,10 +94,10 @@ private:
 	}
 
 	void updateNodeBounds(INT nodeIdx) {
-		BVHNode& node = nodes[nodeIdx];
+		BVHNode& node = m_nodes[nodeIdx];
 		node.bb = {};
 		for (INT i{}; i < node.leftCntPar.y; ++i) {
-			Triangle& leafTri = tris[triIds[node.leftCntPar.x + i].x];
+			Triangle& leafTri = m_tris[m_triIds[node.leftCntPar.x + i].x];
 
 			node.bb.grow(leafTri.v0);
 			node.bb.grow(leafTri.v1);
@@ -117,7 +116,7 @@ private:
 		AABB leftBox{}, rightBox{};
 		int leftCnt{}, rightCnt{};
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			Triangle& t = tris[triIds[node.leftCntPar.x + i].x];
+			Triangle& t = m_tris[m_triIds[node.leftCntPar.x + i].x];
 
 			if (comp(t.ctr, axis) < pos) {
 				++leftCnt;
@@ -140,7 +139,7 @@ private:
 		float bestCost{ std::numeric_limits<float>::max() };
 		for (int a{}; a < 3; ++a) {
 			for (int i{}; i < node.leftCntPar.y; ++i) {
-				Triangle& t = tris[triIds[node.leftCntPar.x + i].x];
+				Triangle& t = m_tris[m_triIds[node.leftCntPar.x + i].x];
 				Vector4 center{ t.ctr };
 				float pos = comp(center, a);
 				float cost = evaluateSAH(node, a, pos);
@@ -164,8 +163,8 @@ private:
 			if (bmin == bmax)
 				continue;
 
-			float step{ (bmax - bmin) / sahStep };
-			for (int i{ 1 }; i < sahStep; ++i) {
+			float step{ (bmax - bmin) / m_sahSteps };
+			for (int i{ 1 }; i < m_sahSteps; ++i) {
 				float candPos{ bmin + i * step };
 				float cost = evaluateSAH(node, a, candPos);
 				if (cost < bestCost) {
@@ -189,16 +188,16 @@ private:
 				continue;
 
 			AABB bounds[MaxSteps]{};
-			int triCnt[MaxSteps]{};
+			int m_triCnt[MaxSteps]{};
 
-			float step = sahStep / (bmax - bmin);
+			float step = m_sahSteps / (bmax - bmin);
 			for (int i{}; i < node.leftCntPar.y; ++i) {
-				Triangle& t = tris[triIds[node.leftCntPar.x + i].x];
+				Triangle& t = m_tris[m_triIds[node.leftCntPar.x + i].x];
 				int id{ std::min(
-					sahStep - 1,
+					m_sahSteps - 1,
 					static_cast<int>((comp(t.ctr, a) - bmin) * step)
 				) };
-				++triCnt[id];
+				++m_triCnt[id];
 				bounds[id].grow(t.v0);
 				bounds[id].grow(t.v1);
 				bounds[id].grow(t.v2);
@@ -209,19 +208,19 @@ private:
 			AABB lBox{}, rBox{};
 			int lSum{}, rSum{};
 
-			for (int i{}; i < sahStep - 1; ++i) {
-				lSum += triCnt[i];
+			for (int i{}; i < m_sahSteps - 1; ++i) {
+				lSum += m_triCnt[i];
 				lCnt[i] = lSum;
 				lBox.grow(bounds[i]);
 				lArea[i] = lBox.area();
 
-				rSum += triCnt[sahStep - 1 - i];
-				rCnt[sahStep - 2 - i] = rSum;
-				rBox.grow(bounds[sahStep - 1 - i]);
-				rArea[sahStep - 2 - i] = rBox.area();
+				rSum += m_triCnt[m_sahSteps - 1 - i];
+				rCnt[m_sahSteps - 2 - i] = rSum;
+				rBox.grow(bounds[m_sahSteps - 1 - i]);
+				rArea[m_sahSteps - 2 - i] = rBox.area();
 			}
-			step = (bmax - bmin) / sahStep;
-			for (int i{}; i < sahStep - 1; ++i) {
+			step = (bmax - bmin) / m_sahSteps;
+			for (int i{}; i < m_sahSteps - 1; ++i) {
 				float planeCost{ lCnt[i] * lArea[i] + rCnt[i] * rArea[i] };
 				if (planeCost < bestCost) {
 					axis = a;
@@ -235,17 +234,17 @@ private:
 
 	void subdivide(INT nodeId) {
 		// terminate recursion
-		BVHNode& node{ nodes[nodeId] };
+		BVHNode& node{ m_nodes[nodeId] };
 
 		// determine split axis and position
 		int axis{};
 		float splitPos{};
 		float cost{};
 
-		switch (alg) {
+		switch (m_alg) {
 		case 0:
-			if (node.leftCntPar.y <= primsPerLeaf) {
-				++leafs;
+			if (node.leftCntPar.y <= m_primsPerLeaf) {
+				++m_leafs;
 				updateDepths(nodeId);
 				return;
 			}
@@ -262,8 +261,8 @@ private:
 			break;
 		}
 
-		if (alg != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
-			++leafs;
+		if (m_alg != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
+			++m_leafs;
 			updateDepths(nodeId);
 			return;
 		}
@@ -272,21 +271,21 @@ private:
 		INT i{ node.leftCntPar.x };
 		INT j{ i + node.leftCntPar.y - 1 };
 		while (i <= j) {
-			if (splitPos <= comp(tris[triIds[i++].x].ctr, axis))
-				std::swap(triIds[--i].x, triIds[j--].x);
+			if (splitPos <= comp(m_tris[m_triIds[i++].x].ctr, axis))
+				std::swap(m_triIds[--i].x, m_triIds[j--].x);
 		}
 
 		// abort split if one of the sides is empty
 		INT leftCnt{ i - node.leftCntPar.x };
 		if (leftCnt == 0 || leftCnt == node.leftCntPar.y) {
-			++leafs;
+			++m_leafs;
 			updateDepths(nodeId);
 			return;
 		}
 
 		// create child nodes
-		int leftIdx{ nodesUsed++ };
-		nodes[leftIdx].leftCntPar = {
+		int leftIdx{ m_nodesUsed++ };
+		m_nodes[leftIdx].leftCntPar = {
 			node.leftCntPar.x, leftCnt, nodeId, 0
 		};
 
@@ -296,8 +295,8 @@ private:
 
 		updateNodeBounds(leftIdx);
 
-		int rightIdx{ nodesUsed++ };
-		nodes[rightIdx].leftCntPar = {
+		int rightIdx{ m_nodesUsed++ };
+		m_nodes[rightIdx].leftCntPar = {
 			i, node.leftCntPar.y - leftCnt, nodeId, 0
 		};
 		updateNodeBounds(rightIdx);

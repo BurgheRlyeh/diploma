@@ -13,11 +13,10 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 void Geometry::ModelBuffer::updateMatrices() {
-	mModel = Matrix::CreateScale(3.f) * Matrix::CreateRotationX(-XM_PIDIV2);
-	//mModel = Matrix::CreateScale(3.0) * Matrix::CreateRotationX(-XM_PIDIV2);
-	//mModel = Matrix::CreateScale({1.f, 1.f, 1.f}) * Matrix::CreateRotationX(-XM_PIDIV2);
-	//mModel = Matrix::CreateTranslation({ 1.f, 1.f, 1.f });
-	//mModel.Invert(mModelInv);
+	mModel = Matrix::CreateScale(3.f)
+		* Matrix::CreateRotationX(-XM_PIDIV2)
+		* Matrix::CreateRotationY(posAngle.w)
+		* Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
 	mModelInv = mModel.Invert();
 }
 
@@ -185,7 +184,13 @@ void Geometry::update(float delta, bool isRotate) {
 	if (!isRotate) {
 		return;
 	}
-	//updateBVH();
+
+	m_modelBuffer.posAngle.w += delta * DirectX::XM_PIDIV4;
+	m_modelBuffer.updateMatrices();
+
+	m_pDeviceContext->UpdateSubresource(m_pModelBuffer, 0, nullptr, &m_modelBuffer, 0, 0);
+
+	updateBVH();
 }
 
 void Geometry::updateBVH() {
@@ -196,8 +201,8 @@ void Geometry::updateBVH() {
 
 	m_pCPUTimer->stop();
 
-	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, bvh.nodes.data(), 0, 0);
-	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, bvh.triIds.data(), 0, 0);
+	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, bvh.m_nodes.data(), 0, 0);
+	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, bvh.m_triIds.data(), 0, 0);
 }
 
 void Geometry::resizeUAV(ID3D11Texture2D* tex) {

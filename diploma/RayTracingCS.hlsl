@@ -12,6 +12,7 @@ cbuffer IdsConstBuffer: register(b1) {
 cbuffer ModelBuffer: register(b2) {
     float4x4 mModel;
     float4x4 mModelInv;
+    float4 posAngle;
 }
 
 cbuffer TrianglesIDs: register(b3) {

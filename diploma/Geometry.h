@@ -38,6 +38,7 @@ class Geometry {
 	struct ModelBuffer {
 		DirectX::SimpleMath::Matrix mModel{};
 		DirectX::SimpleMath::Matrix mModelInv{};
+		DirectX::SimpleMath::Vector4 posAngle{};
 
 		void updateMatrices();
 	};
