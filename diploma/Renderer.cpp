@@ -4,6 +4,7 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 void Renderer::switchRotation() {
+	m_isModelRotate = !m_isModelRotate;
 }
 
 bool Renderer::init(HWND hWnd) {
@@ -51,7 +52,8 @@ bool Renderer::init(HWND hWnd) {
 		ImGui_ImplDX11_Init(m_pDevice, m_pDeviceContext);
 	}
 
-	//m_CPUTimer.start();
+	m_CPUTimer.start();
+	m_prevTime = m_CPUTimer.curr();
 
 	if (FAILED(hr)) {
 		term();
@@ -231,20 +233,10 @@ bool Renderer::resize(UINT width, UINT height) {
 }
 
 void Renderer::update() {
-	size_t time{ static_cast<size_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-		std::chrono::steady_clock::now().time_since_epoch()
-	).count()) };
-
-	if (!m_prevTime) {
-		m_prevTime = time;
-	}
+	double time{ m_CPUTimer.curr() };
 
 	// move camera
-	m_pCamera->updatePosition((time - m_prevTime) / 1e6f);
-
-	//m_pCube->update((time - m_prevTime) / 1e6f, m_isModelRotate);
-	//m_pGeom->update((time - m_prevTime) / 1e6f, m_isModelRotate);
-	m_pGeom->updateBVH();
+	m_pCamera->updatePosition((time - m_prevTime) / 1e3f);
 
 	m_prevTime = time;
 
@@ -252,11 +244,17 @@ void Renderer::update() {
 
 	// Setup camera
 	Matrix v{ XMMatrixLookAtLH(cameraPos, m_pCamera->getPoi(), m_pCamera->getUp()) };
-	Matrix p{ XMMatrixPerspectiveLH(
+	/*Matrix p{ XMMatrixPerspectiveLH(
 		2 * m_far * tanf(m_fov / 2),
 		2 * m_far * tanf(m_fov / 2) * m_height / m_width,
 		m_far,
 		m_near
+	) };*/
+	Matrix p{ XMMatrixPerspectiveLH(
+		2 * m_near * tanf(m_fov / 2),
+		2 * m_near * tanf(m_fov / 2) * m_height / m_width,
+		m_near,
+		m_far
 	) };
 
 	D3D11_MAPPED_SUBRESOURCE subres;
@@ -274,7 +272,7 @@ void Renderer::update() {
 		m_pDeviceContext->Unmap(m_pSceneBuffer, 0);
 	}
 
-	// cube ray tracing buffer update
+	// ray tracing buffer update
 	{
 		THROW_IF_FAILED(m_pDeviceContext->Map(
 			m_pRTBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subres
@@ -283,11 +281,11 @@ void Renderer::update() {
 		(v * p).Invert(m_rtBuffer.pvInv);
 
 		// update direction vector
+		Vector4 n = { 1.f / m_width, -1.f / m_height, 1.f / (m_near - m_far), 1.f };
+		n = Vector4::Transform(n, m_rtBuffer.pvInv);
+
 		Vector4 f = { 1.f / m_width, -1.f / m_height, 0.f, 1.f };
 		f = Vector4::Transform(f, m_rtBuffer.pvInv);
-
-		Vector4 n = { f.x, f.y, 1.f / (m_near - m_far), f.w };
-		n = Vector4::Transform(n, m_rtBuffer.pvInv);
 
 		(f / f.w - n / n.w).Normalize(m_rtBuffer.camDir);
 
@@ -296,15 +294,19 @@ void Renderer::update() {
 	}
 }
 
+void Renderer::updateBVH() {
+	m_pGeom->updateBVH();
+}
+
 bool Renderer::render() {
 	m_pDeviceContext->ClearState();
 
 	ID3D11RenderTargetView* views[]{ m_pPostProcess->getBufferRTV() };
-	m_pDeviceContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
+	m_pDeviceContext->OMSetRenderTargets(1, views, nullptr);
 
 	static const FLOAT BackColor[4]{ 0.25f, 0.25f, 0.25f, 1.0f };
 	m_pDeviceContext->ClearRenderTargetView(m_pPostProcess->getBufferRTV(), BackColor);
-	m_pDeviceContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
+	//m_pDeviceContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
 	D3D11_VIEWPORT viewport{
 		.Width{ static_cast<FLOAT>(m_width) },
@@ -323,166 +325,138 @@ bool Renderer::render() {
 	m_pDeviceContext->RSSetState(m_pRasterizerState);
 	m_pDeviceContext->OMSetBlendState(m_pOpaqueBlendState, nullptr, 0xFFFFFFFF);
 
-	// CUBE
-	//if (m_pCube->getIsRayTracing()) {
-	//	m_pCube->rayTracing(m_pSampler, m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
-	//	// bind render target
-	//	m_pDeviceContext->OMSetRenderTargets(1, views, m_isUseZBuffer ? m_pDepthBufferDSV : nullptr);
-	//}
-
 	m_pGeom->rayTracing(m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
-	m_pDeviceContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
-
-	// CUBE END
-
-	/*m_pRect->render(
-		m_pSampler,
-		m_pSceneBuffer,
-		m_pTransDepthState,
-		m_pTransBlendState,
-		m_camera.getPosition()
-	);*/
+	m_pDeviceContext->OMSetRenderTargets(1, views, nullptr);
 
 	m_pPostProcess->render(m_pBackBufferRTV, m_pSampler);
 
-	//m_pCube->readQueries();
+	++m_frameCounter;
+	double time{ m_CPUTimer.curr() };
+	if (time - m_prevSec > 1e3) {
+		m_fps = 1e3 * m_frameCounter / (time - m_prevSec);
+		m_prevSec = time;
 
-	/*++m_frameCounter;
-	double bvhTime{ m_pGeom->m_pCPUTimer->getTime() };
-	m_bvhTime += bvhTime;
-	double cubeTime{ m_pCube->m_pGPUTimer->getTime() };
-	m_cubeTime += cubeTime;*/
+		double bvhTimeAvg{ m_pGeom->m_pCPUTimer->getAcc() };
+		if (bvhTimeAvg)
+			m_geomCPUAvgTime = bvhTimeAvg / m_frameCounter;
+		
+		
+		m_geomGPUAvgTime = m_pGeom->m_pGPUTimer->getAcc() / m_frameCounter;
 
-	/*double currTime{ m_CPUTimer.getCurrent() };
-	if (currTime > 1e3) {
-		m_fps = m_frameCounter / (currTime / 1e3);
-		m_bvhTimeAvg = m_bvhTime / m_frameCounter;
-		m_cubeTimeAvg = m_cubeTime / m_frameCounter;
-		m_bvhTime = 0;
-		m_cubeTime = 0;
 		m_frameCounter = 0;
-		m_CPUTimer.start();
-	}*/
+	}
 
 	// Start the Dear ImGui frame
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	//{
-	//	ImGui::Begin("Stats");
-
-	//	ImGui::Text("FPS: %.1f", m_fps);
-
-	//	ImGui::Text("");
-
-	//	ImGui::Text("AVG CubeBVH time (ms): %.3f", m_bvhTimeAvg);
-	//	ImGui::Text("AVG Cube time (ms): %.3f", m_cubeTimeAvg);
-
-	//	ImGui::Text("");
-
-	//	ImGui::Text("Width: %d", m_width);
-	//	ImGui::Text("Height: %d", m_height);
-
-	//	ImGui::End();
-	//}
-
 	{
-		ImGui::Begin("GeomBVH");
+		ImGui::Begin("App Statistics");
 
-	//	ImGui::Text("Split alg:");
+		ImGui::Text("FPS: %.1f", m_fps);
 
-	//	bool isSAH{ m_pGeom->bvh.isSAH };
-	//	ImGui::Checkbox("SAH", &isSAH);
-	//	if (m_pGeom->bvh.isSAH != isSAH) {
-	//		m_pGeom->bvh.isSAH = isSAH;
-	//		m_pGeom->updateBVH(true);
-	//	}
+		ImGui::Text("");
 
-	//	if (isSAH) {
-	//		bool isStepSAH{ m_pGeom->bvh.isStepSAH };
-	//		ImGui::Checkbox("SAH, fixed planes", &isStepSAH);
-	//		if (m_pGeom->bvh.isStepSAH != isStepSAH) {
-	//			m_pGeom->bvh.isStepSAH = isStepSAH;
-	//			m_pGeom->updateBVH(true);
-	//		}
-
-	//		if (isStepSAH) {
-	//			bool isBinsSAH{ m_pGeom->bvh.isBinsSAH };
-	//			ImGui::Checkbox("dynamic SAH, fixed planes", &isBinsSAH);
-	//			if (m_pGeom->bvh.isBinsSAH != isBinsSAH) {
-	//				m_pGeom->bvh.isBinsSAH = isBinsSAH;
-	//				m_pGeom->updateBVH(true);
-	//			}
-	//		}
-	//	}
-
-		//ImGui::Text(" ");
-		ImGui::Text("Stats:");
-
-		//ImGui::Text("Geoms: %d", m_pGeom->bvh.cnt);
-		ImGui::Text("Nodes: %d", m_pGeom->bvh.nodesUsed);
-
-		Vector3 pos = m_pCamera->getPosition();
-		ImGui::Text("Camera.pos.x: %f", pos.x);
-		ImGui::Text("Camera.pos.y: %f", pos.y);
-		ImGui::Text("Camera.pos.z: %f", pos.z);
-
-		Vector3 poi = m_pCamera->getPoi();
-		ImGui::Text("Camera.poi.x: %f", poi.x);
-		ImGui::Text("Camera.poi.y: %f", poi.y);
-		ImGui::Text("Camera.poi.z: %f", poi.z);
-
-
-		//ImGui::Text("Primitives: %d", m_pGeom->bvh.cnt * 1107);
-		//ImGui::Text("Leafs: %d", m_pGeom->bvh.leafs);
-		//ImGui::Text("Average prims per leaf: %.3f", 1107.0 / m_pGeom->bvh.leafs);
-		//ImGui::Text("Depth: %d ... %d", m_pGeom->bvh.depthMin, m_pGeom->bvh.depthMax);
-
-		//ImGui::Text("");
-
-		//if (m_pGeom->bvh.isStepSAH) {
-		//	ImGui::DragInt("SAH planes", &m_pGeom->bvh.sahStep, 1, 2, 32);
-		//}
-		//else if (!m_pGeom->bvh.isSAH) {
-		//	ImGui::DragInt("ppl", &m_pGeom->bvh.trianglesPerLeaf, 1, 1, 12);
-		//}
+		ImGui::Text("Width: %d", m_width);
+		ImGui::Text("Height: %d", m_height);
 
 		ImGui::End();
 	}
 
-	//{
-	//	ImGui::Begin("RT");
+	{
+		ImGui::Begin("BVH");
 
-	//	bool intsecStackless{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 0 };
-	//	bool intsecStack{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 1 };
-	//	bool intsecNaive{ m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 2 };
+		ImGui::Text("Split algorithm:");
 
-	//	ImGui::Checkbox("Stackless intersection", &intsecStackless);
-	//	ImGui::Checkbox("Stack intersection", &intsecStack);
-	//	ImGui::Checkbox("Naive intersection", &intsecNaive);
+		bool isDichotomy{ m_pGeom->bvh.alg == 0 };
+		ImGui::Checkbox("Dichotomy", &isDichotomy);
+		if (isDichotomy) {
+			m_pGeom->bvh.alg = 0;
+			ImGui::DragInt("Primitives per leaf", &m_pGeom->bvh.primsPerLeaf, 1, 2, 32);
+		}
 
-	//	if (m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 0)
-	//		m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStack ? 1 : (intsecNaive ? 2 : 0);
-	//	else if (m_rtBuffer.instancesIntsecalgLeafsTCheck.y == 1)
-	//		m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStackless ? 0 : (intsecNaive ? 2 : 1);
-	//	else
-	//		m_rtBuffer.instancesIntsecalgLeafsTCheck.y = intsecStackless ? 0 : (intsecStack ? 1 : 2);
+		bool isSAH{ m_pGeom->bvh.alg == 1 };
+		ImGui::Checkbox("SAH", &isSAH);
+		if (isSAH) {
+			m_pGeom->bvh.alg = 1;
+		}
 
-	//	ImGui::Text(" ");
+		bool isFixedStepSAH{ m_pGeom->bvh.alg == 2 };
+		ImGui::Checkbox("FixedStepSAH", &isFixedStepSAH);
+		if (isFixedStepSAH) {
+			m_pGeom->bvh.alg = 2;
+		}
 
-	//	ImGui::Text("Stackless settings:");
+		bool isBinnedSAH{ m_pGeom->bvh.alg == 3 };
+		ImGui::Checkbox("BinnedSAH", &isBinnedSAH);
+		if (isBinnedSAH) {
+			m_pGeom->bvh.alg = 3;
+		}
 
-	//	bool notProcLeafs{ m_rtBuffer.instancesIntsecalgLeafsTCheck.z == 1 };
-	//	ImGui::Checkbox("Not process leafs", &notProcLeafs);
-	//	m_rtBuffer.instancesIntsecalgLeafsTCheck.z = notProcLeafs ? 1 : 0;
+		if (isFixedStepSAH || isBinnedSAH) {
+			ImGui::DragInt("SAH step", &m_pGeom->bvh.sahStep, 1, 2, 32);
+		}
 
-	//	bool checkT{ m_rtBuffer.instancesIntsecalgLeafsTCheck.w == 1 };
-	//	ImGui::Checkbox("Check T", &checkT);
-	//	m_rtBuffer.instancesIntsecalgLeafsTCheck.w = checkT ? 1 : 0;
+		ImGui::Text(" ");
 
-	//	ImGui::End();
-	//}
+		ImGui::Text("Statistics:");
+
+		ImGui::Text("Average BVH time (ms): %.3f", m_geomCPUAvgTime);
+		ImGui::Text(" ");
+		ImGui::Text("Nodes: %d", m_pGeom->bvh.nodesUsed);
+		ImGui::Text("Leafs: %d", m_pGeom->bvh.leafs);
+		ImGui::Text(" ");
+		ImGui::Text("Primitives: %d", m_pGeom->bvh.triCnt);
+		ImGui::Text("Average primitives per leaf: %.3f", 1.f * m_pGeom->bvh.triCnt / m_pGeom->bvh.leafs);
+		ImGui::Text(" ");
+		ImGui::Text("Min depth: %d", m_pGeom->bvh.depthMin);
+		ImGui::Text("Max depth: %d", m_pGeom->bvh.depthMax);
+
+		ImGui::End();
+	}
+
+	{
+		ImGui::Begin("Ray Tracing");
+
+		ImGui::Text("Intersection algorithm:");
+
+		bool isNaive{ m_rtBuffer.instsAlgLeafsTCheck.y == 0 };
+		ImGui::Checkbox("Naive", &isNaive);
+		if (isNaive) {
+			m_rtBuffer.instsAlgLeafsTCheck.y = 0;
+		}
+
+		bool isBVHStack{ m_rtBuffer.instsAlgLeafsTCheck.y == 1 };
+		ImGui::Checkbox("Stack", &isBVHStack);
+		if (isBVHStack) {
+			m_rtBuffer.instsAlgLeafsTCheck.y = 1;
+		}
+
+		bool isBVHStackless{ m_rtBuffer.instsAlgLeafsTCheck.y == 2 };
+		ImGui::Checkbox("Stackless", &isBVHStackless);
+		if (isBVHStackless) {
+			m_rtBuffer.instsAlgLeafsTCheck.y = 2;
+
+			ImGui::Text(" ");
+
+			bool isProcessLeafs{ m_rtBuffer.instsAlgLeafsTCheck.z == 1 };
+			ImGui::Checkbox("Process leafs", &isProcessLeafs);
+			m_rtBuffer.instsAlgLeafsTCheck.z = isProcessLeafs ? 1 : 0;
+
+			bool isTCheck{ m_rtBuffer.instsAlgLeafsTCheck.w == 1 };
+			ImGui::Checkbox("Check T", &isTCheck);
+			m_rtBuffer.instsAlgLeafsTCheck.w = isTCheck ? 1 : 0;
+		}
+
+		ImGui::Text(" ");
+
+		ImGui::Text("Statistics:");
+
+		ImGui::Text("Average BVH traverse time (ms): %.3f", m_geomGPUAvgTime);
+
+		ImGui::End();
+	}
 
 	// Rendering
 	ImGui::Render();

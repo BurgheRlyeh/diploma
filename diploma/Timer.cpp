@@ -9,13 +9,21 @@ void CPUTimer::start() {
 
 void CPUTimer::stop() {
 	m_timeStop = high_resolution_clock::now();
+
+	m_acc += getTime();
 }
 
 double CPUTimer::getTime() {
 	return duration<double, milli>(m_timeStop - m_timeStart).count();
 }
 
-double CPUTimer::getCurrent() {
+double CPUTimer::getAcc() {
+	double acc{ m_acc };
+	if (m_acc) m_acc = 0;
+	return acc;
+}
+
+double CPUTimer::curr() {
 	steady_clock::time_point timeCurr{ high_resolution_clock::now() };
 	return duration<double, milli>(timeCurr - m_timeStart).count();
 }
@@ -46,6 +54,8 @@ void GPUTimer::start() {
 void GPUTimer::stop() {
 	m_pDeviceContext->End(m_pTimeStop);
 	m_pDeviceContext->End(m_pDisjoint);
+
+	m_acc += getTime();
 }
 
 double GPUTimer::getTime() {
@@ -57,4 +67,10 @@ double GPUTimer::getTime() {
 	m_pDeviceContext->GetData(m_pDisjoint, &disjoint, sizeof(disjoint), 0);
 
 	return disjoint.Disjoint ? 0.0 : 1e3 * (t - t0) / disjoint.Frequency;
+}
+
+double GPUTimer::getAcc() {
+	double acc{ m_acc };
+	if (m_acc) m_acc = 0;
+	return acc;
 }

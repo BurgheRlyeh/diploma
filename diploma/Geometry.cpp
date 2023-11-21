@@ -13,7 +13,11 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 void Geometry::ModelBuffer::updateMatrices() {
-	mModel = Matrix::CreateRotationY(XM_PIDIV2);
+	mModel = Matrix::CreateScale(3.f) * Matrix::CreateRotationX(-XM_PIDIV2);
+	//mModel = Matrix::CreateScale(3.0) * Matrix::CreateRotationX(-XM_PIDIV2);
+	//mModel = Matrix::CreateScale({1.f, 1.f, 1.f}) * Matrix::CreateRotationX(-XM_PIDIV2);
+	//mModel = Matrix::CreateTranslation({ 1.f, 1.f, 1.f });
+	//mModel.Invert(mModelInv);
 	mModelInv = mModel.Invert();
 }
 
@@ -22,6 +26,7 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 
 	// upload geometry
 	{
+		// main - 11715
 		CSVGeometryLoader geom = CSVGeometryLoader::loadFrom("11715.csv");
 
 		indices = new XMINT4[idsCnt = geom.indices.size()];
@@ -69,7 +74,7 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 
 	// create model buffer
 	{
-		//m_modelBuffer.updateMatrices();
+		m_modelBuffer.updateMatrices();
 
 		D3D11_BUFFER_DESC desc{
 			.ByteWidth{ sizeof(ModelBuffer) },
@@ -160,6 +165,8 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 	m_pGPUTimer = new GPUTimer(m_pDevice, m_pDeviceContext);
 	m_pCPUTimer = new CPUTimer();
 
+	updateBVH();
+
 	return hr;
 }
 
@@ -178,19 +185,13 @@ void Geometry::update(float delta, bool isRotate) {
 	if (!isRotate) {
 		return;
 	}
-
-	//m_modelBuffer.posAngle.w += delta * m_modelBuffer.shineSpeedTexIdNM.y;
-	//m_modelBuffer.updateMatrices();
-
-	//m_pDeviceContext->UpdateSubresource(m_pModelBuffer, 0, nullptr, &m_modelBuffer, 0, 0);
-
-	updateBVH();
+	//updateBVH();
 }
 
 void Geometry::updateBVH() {
 	m_pCPUTimer->start();
 
-	bvh.init(vertices, vtsCnt, indices, idsCnt);
+	bvh.init(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
 	bvh.build();
 
 	m_pCPUTimer->stop();
@@ -233,9 +234,10 @@ void Geometry::rayTracing(ID3D11Buffer* m_pSBuf, ID3D11Buffer* m_pRTBuf, int w, 
 	m_pDeviceContext->CSSetUnorderedAccessViews(0, 1, uavBuffers, nullptr);
 
 	m_pDeviceContext->CSSetShader(m_pRayTracingCS, nullptr, 0);
-	//m_pGPUTimer->start();
+
+	m_pGPUTimer->start();
 	m_pDeviceContext->Dispatch(w, h, 1);
-	//m_pGPUTimer->stop();
+	m_pGPUTimer->stop();
 
 	// unbind uav
 	ID3D11UnorderedAccessView* nullUav{};

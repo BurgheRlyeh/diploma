@@ -10,19 +10,23 @@ public:
 	virtual void stop() = 0;
 
 	virtual double getTime() = 0;
+	virtual double getAcc() = 0;
 };
 
 class CPUTimer : ITimer {
 	std::chrono::steady_clock::time_point m_timeStart{};
 	std::chrono::steady_clock::time_point m_timeStop{};
 
+	double m_acc{};
+
 public:
 	void start() override;
 	void stop() override;
 
 	double getTime() override;
+	double getAcc() override;
 
-	double getCurrent();
+	double curr();
 };
 
 class GPUTimer : ITimer {
@@ -33,6 +37,8 @@ class GPUTimer : ITimer {
 	ID3D11Query* m_pTimeStop{};
 	ID3D11Query* m_pDisjoint{};
 
+	double m_acc{};
+
 public:
 	GPUTimer() = delete;
 	GPUTimer(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext);
@@ -42,4 +48,5 @@ public:
 	void stop() override;
 
 	double getTime() override;
+	double getAcc() override;
 };

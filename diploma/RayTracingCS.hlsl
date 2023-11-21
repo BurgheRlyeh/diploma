@@ -21,7 +21,7 @@ cbuffer TrianglesIDs: register(b3) {
 cbuffer RTBuffer: register(b4) {
     float4 whnf;
     float4x4 vpInv;
-    int4 instancesIntsecalgLeafsTCheck;
+    int4 instsAlgLeafsTCheck;
     float4 camDir;
 }
 
@@ -114,7 +114,7 @@ Intsec naiveIntersection(Ray ray) {
     best.t = whnf.w;
     best.u = best.v = -1.f;
 
-    for (int m = 0; m < instancesIntsecalgLeafsTCheck.x; ++m) {
+    for (int m = 0; m < instsAlgLeafsTCheck.x; ++m) {
         Ray mRay;
         mRay.orig = mul(mModelInv, ray.orig);
         mRay.dest = mul(mModelInv, ray.dest);
@@ -254,15 +254,13 @@ Intsec bvhStacklessIntersection(Ray ray) {
         // from parent
         if (nodeState.y == 0) {
             float t = rayIntersectsAABB(ray, nodes[nodeState.x].bb);
-            if (instancesIntsecalgLeafsTCheck.w == 1 && best.t < t)
-                nodeState = int2(sibling(nodeState.x), 1);
-            else if (t == whnf.w)
+            if (t == whnf.w || instsAlgLeafsTCheck.w == 1 && best.t + 1e6f < t)
                 nodeState = int2(sibling(nodeState.x), 1);
             else {
                 if (!isLeaf(nodeState.x))
                     nodeState = int2(nearChild(nodeState.x, ray), 0);
                 else {
-                    if (instancesIntsecalgLeafsTCheck.z == 0) {
+                    if (instsAlgLeafsTCheck.z == 1) {
                         Intsec intsec = bestBVHLeafIntersection(ray, nodeState.x);
                         if (intsec.t < best.t)
                             best = intsec;
@@ -274,14 +272,12 @@ Intsec bvhStacklessIntersection(Ray ray) {
         // from sibling
         else if (nodeState.y == 1) {
             float t = rayIntersectsAABB(ray, nodes[nodeState.x].bb);
-            if (instancesIntsecalgLeafsTCheck.w == 1 && best.t < t)
-                nodeState = int2(parent(nodeState.x), 2);
-            else if (t == whnf.w)
+            if (t == whnf.w || instsAlgLeafsTCheck.w == 1 && best.t + 1e6f < t)
                 nodeState = int2(parent(nodeState.x), 2);
             else if (!isLeaf(nodeState.x))
                 nodeState = int2(nearChild(nodeState.x, ray), 0);
             else {
-                if (instancesIntsecalgLeafsTCheck.z == 0) {
+                if (instsAlgLeafsTCheck.z == 1) {
                     Intsec intsec = bestBVHLeafIntersection(ray, nodeState.x);
                     if (intsec.t < best.t)
                         best = intsec;
@@ -307,77 +303,26 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     Ray ray = generateRay(DTid.xy);
 
     Intsec best;
-    if (instancesIntsecalgLeafsTCheck.y == 0)
-        best = bvhStacklessIntersection(ray);
-    else if (instancesIntsecalgLeafsTCheck.y == 1)
-        best = bvhIntersection(ray);
-    else //if (instancesIntsecalgLeafsTCheck.y == 2)
-        best = naiveIntersection(ray);
-
-    //Intsec best = naiveIntersection(ray);
-    //Intsec best = bvhIntersection(ray);
-    //Intsec best = bvhStacklessIntersection(ray);
-
+    switch (instsAlgLeafsTCheck.y) {
+        case 0:
+            best = naiveIntersection(ray);
+            break;
+        case 1:
+            best = bvhIntersection(ray);
+            break;
+        case 2:
+            best = bvhStacklessIntersection(ray);
+            break;
+    }
+    
     if (best.t <= whnf.z || whnf.w <= best.t)
         return;
     
-    float4 color1 = float4(1.f, 1.f, 1.f, 1.f);
-    float4 color2 = float4(1.f, 0.f, 0.f, 1.f);
-
-    texOutput[DTid.xy] = lerp(color1, color2, 1.f * best.tId / LIMIT_I);
-    
     // depth view
-    //{
-    //    float depth = best.t * dot(ray.dir, camDir);
+    float depth = best.t * dot(ray.dir, camDir);
         
-    //    float4 colornear = float4(1.f, 1.f, 1.f, 1.f);
-    //    float4 colorfar = float4(0.f, 0.f, 0.f, 1.f);
-
-    //    texOutput[DTid.xy] = lerp(colornear, colorfar, 1.f - 1.f / depth);
-    //}
-
-    //float4 v0 = vertices[indices[best.tId].x];
-    //float4 v1 = vertices[indices[best.tId].y];
-    //float4 v2 = vertices[indices[best.tId].z];
-
-    //float2 uv = float2(best.u, best.v);
-    //uv = (1 - uv.x - uv.y) * v0.uv.xy + uv.x * v1.uv.xy + uv.y * v2.uv.xy;
-
-    //float4 color = colorTexture.SampleLevel(
-    //    colorSampler,
-    //    float3(uv, modelBuffer[best.mId].shineSpeedTexIdNM.z),
-    //    0
-    //);
-
-    //texOutput[DTid.xy] = color;
-
-
-    //uint idx = best.mId;
-    //uint flags = asuint(modelBuffer[idx].shineSpeedTexIdNM.w);
-
-    //float4 cl = colorTexture.SampleLevel(
-    //    colorSampler,
-    //    float3(uv, modelBuffer[idx].shineSpeedTexIdNM.z)
-    //    0
-    //);
-    //float4 finalCl = ambientColor * cl;
-
-    //float3 normal = float3(0.f, 0.f, 0.f);
-    //if (lightsBumpNormsCull.y > 0 && flags == 1)
-    //{
-    //    float4 tang0 = mul(modelBuffer[idx].normTangMatrix, v0.tangent);
-    //    float4 tang1 = mul(modelBuffer[idx].normTangMatrix, v1.tangent);
-    //    float4 tang2 = mul(modelBuffer[idx].normTangMatrix, v2.tangent);
-    //    float4 tang = lerp(tang0, tang1, uv.x);
-    //    tang = lerp(tang, tang2, uv.y);
-
-    //    float4 norm0 = mul(modelBuffer[idx].normTangMatrix, v0.tangent);
-    //    float4 norm1 = mul(modelBuffer[idx].normTangMatrix, v1.tangent);
-    //    float4 norm2 = mul(modelBuffer[idx].normTangMatrix, v2.tangent);
-    //    float4 norm = lerp(norm0, norm1, uv.x);
-    //    norm = lerp(norm, norm2, uv.y);
-
-
-    //    float3 binorm = 
-    //}
+    float4 colorNear = float4(1.f, 1.f, 1.f, 1.f);
+    float4 colorFar = float4(0.f, 0.f, 0.f, 1.f);
+        
+    texOutput[DTid.xy] = lerp(colorNear, colorFar, 1.f - 1.f / depth);
 }

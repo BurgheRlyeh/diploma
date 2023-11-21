@@ -29,29 +29,37 @@ private:
 		Vector4 ctr{};
 	};
 	std::vector<Triangle> tris{};
-	INT triCnt{};
 
 public:
-	INT nodesUsed{ 1 };
+	INT triCnt{};
 
-	// sah settings
-	bool isStepSAH{ true };
-	bool isBinsSAH{ true };	// true / false
+	INT nodesUsed{ 1 };
+	INT leafs{};
+	INT depthMin{ 2 * 1107 - 1 };
+	INT depthMax{ -1 };
+
+	INT alg{ 3 };
+	INT primsPerLeaf{ 2 };
 	INT sahStep{ 8 };
 
 
-	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt) {
-		nodesUsed = 1;
+	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
 		triCnt = idsCnt;
+
+		nodesUsed = 1;
+		leafs = 0;
+		depthMin = 2 * triCnt - 1;
+		depthMax = -1;
+
 		tris.resize(triCnt);
 		triIds.resize(triCnt);
 		nodes.resize(2 * triCnt - 1);
 
 		for (INT i{}; i < triCnt; ++i) {
 			tris[i] = {
-				vts[ids[i].x],
-				vts[ids[i].y],
-				vts[ids[i].z]
+				Vector4::Transform(vts[ids[i].x], modelMatrix),
+				Vector4::Transform(vts[ids[i].y], modelMatrix),
+				Vector4::Transform(vts[ids[i].z], modelMatrix)
 			};
 			tris[i].ctr = (tris[i].v0 + tris[i].v1 + tris[i].v2) / 3.f;
 
@@ -69,16 +77,11 @@ public:
 	}
 
 private:
-	void updateNodeBounds(INT nodeIdx) {
-		BVHNode& node = nodes[nodeIdx];
-		node.bb = {};
-		for (INT i{}; i < node.leftCntPar.y; ++i) {
-			Triangle& leafTri = tris[triIds[node.leftCntPar.x + i].x];
-
-			node.bb.grow(leafTri.v0);
-			node.bb.grow(leafTri.v1);
-			node.bb.grow(leafTri.v2);
-		}
+	void updateDepths(INT id) {
+		int d{};
+		for (; id != 0; id = nodes[id].leftCntPar.z) ++d;
+		depthMin = std::min(depthMin, d);
+		depthMax = std::max(depthMax, d);
 	}
 
 	float comp(Vector4 v, INT idx) {
@@ -88,6 +91,18 @@ private:
 		case 2: return v.z;
 		case 3: return v.w;
 		default: throw;
+		}
+	}
+
+	void updateNodeBounds(INT nodeIdx) {
+		BVHNode& node = nodes[nodeIdx];
+		node.bb = {};
+		for (INT i{}; i < node.leftCntPar.y; ++i) {
+			Triangle& leafTri = tris[triIds[node.leftCntPar.x + i].x];
+
+			node.bb.grow(leafTri.v0);
+			node.bb.grow(leafTri.v1);
+			node.bb.grow(leafTri.v2);
 		}
 	}
 
@@ -227,15 +242,29 @@ private:
 		float splitPos{};
 		float cost{};
 
-		if (!isStepSAH) {
+		switch (alg) {
+		case 0:
+			if (node.leftCntPar.y <= primsPerLeaf) {
+				++leafs;
+				updateDepths(nodeId);
+				return;
+			}
+			splitDichotomy(node, axis, splitPos);
+			break;
+		case 1:
 			cost = splitSAH(node, axis, splitPos);
-		} else if (!isBinsSAH) {
+			break;
+		case 2:
 			cost = splitFixedStepSAH(node, axis, splitPos);
-		} else {
+			break;
+		case 3:
 			cost = splitBinnedSAH(node, axis, splitPos);
+			break;
 		}
 
-		if (cost >= node.bb.area() * node.leftCntPar.y) {
+		if (alg != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
+			++leafs;
+			updateDepths(nodeId);
 			return;
 		}
 
@@ -250,6 +279,8 @@ private:
 		// abort split if one of the sides is empty
 		INT leftCnt{ i - node.leftCntPar.x };
 		if (leftCnt == 0 || leftCnt == node.leftCntPar.y) {
+			++leafs;
+			updateDepths(nodeId);
 			return;
 		}
 

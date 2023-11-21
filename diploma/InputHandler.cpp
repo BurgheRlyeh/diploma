@@ -36,8 +36,7 @@ void InputHandler::keyPressed(int keyCode) {
 
 	case 'B':
 	case 'b':
-		/*renderer.m_pCube->updateBVH();
-		renderer.m_pGeom->updateBVH();*/
+		renderer->updateBVH();
 		break;
 
 	default:

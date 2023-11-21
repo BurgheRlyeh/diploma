@@ -45,7 +45,7 @@ class Renderer {
 			16.f, 9.f, 0.1f, 100.f
 		};
 		DirectX::SimpleMath::Matrix pvInv{};
-		DirectX::XMINT4 instancesIntsecalgLeafsTCheck{ 1, 0, 0, 1 };
+		DirectX::XMINT4 instsAlgLeafsTCheck{ 1, 2, 1, 1 };
 		DirectX::SimpleMath::Vector4 camDir{};
 	};
 	RTBuffer m_rtBuffer{};
@@ -61,21 +61,24 @@ class Renderer {
 
 	ID3D11SamplerState* m_pSampler{};
 
-	// other classes
 	PostProcess* m_pPostProcess{};
+
 	Camera* m_pCamera{};
+
 	Geometry* m_pGeom{};
+	double m_geomCPUAvgTime{};
+	double m_geomGPUAvgTime{};
 
-	size_t m_prevTime{};
+	bool m_isModelRotate{};
 
-	// prifiling
-	//CPUTimer m_CPUTimer{};
+	// time
+	CPUTimer m_CPUTimer{};
+	double m_prevTime{};
+	double m_prevSec{};
+
+	// framerate
 	UINT m_frameCounter{};
 	double m_fps{};
-	double m_bvhTime{};
-	double m_bvhTimeAvg{};
-	double m_cubeTime{};
-	double m_cubeTimeAvg{};
 
 
 public:
@@ -88,6 +91,7 @@ public:
 
 	bool resize(UINT width, UINT height);
 	void update();
+	void updateBVH();
 	bool render();
 
 private:
