@@ -1,5 +1,7 @@
 #include "BVH.h"
 
+#include <algorithm>
+
 void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
 	m_triCnt = idsCnt;
 
@@ -30,7 +32,35 @@ void BVH::build() {
 		0, m_triCnt, -1, 0
 	};
 	updateNodeBounds(0);
+	mortonSort();
 	subdivide(0);
+}
+
+void BVH::mortonSort() {
+	// AABB of all primitives centroids
+	AABB aabb{};
+	for (const Triangle& tr : m_tris) {
+		aabb.grow(tr.ctr);
+	}
+
+	// compute morton indices of primitives
+	m_mortonPrims.resize(m_triCnt);
+	for (int i{}; i < m_triCnt; ++i) {
+		m_mortonPrims[i].primId = i;
+
+		int mortonScale{ 1 << 10 };
+		Vector4 relateCtr{ aabb.relateVecPos(m_tris[i].ctr) };
+		m_mortonPrims[i].mortonCode = encodeMorton(mortonScale * relateCtr);
+	}
+
+	// sort primitives
+	std::sort(
+		m_mortonPrims.begin(),
+		m_mortonPrims.end(),
+		[&](const MortonPrim& mp1, const MortonPrim& mp2) {
+			return mp1.mortonCode < mp2.mortonCode;
+		}
+	);
 }
 
 void BVH::updateDepths(INT id) {

@@ -292,6 +292,13 @@ void Renderer::update() {
 
 		(f / f.w - n / n.w).Normalize(m_rtBuffer.camDir);
 
+		m_rtBuffer.highligths = {
+			m_pGeom->bvh.m_mortonPrims[m_highlights.x].primId,
+			m_pGeom->bvh.m_mortonPrims[m_highlights.y].primId,
+			m_pGeom->bvh.m_mortonPrims[m_highlights.z].primId,
+			-1
+		};
+
 		memcpy(subres.pData, &m_rtBuffer, sizeof(RTBuffer));
 		m_pDeviceContext->Unmap(m_pRTBuffer, 0);
 	}
@@ -307,7 +314,7 @@ bool Renderer::render() {
 	ID3D11RenderTargetView* views[]{ m_pPostProcess->getBufferRTV() };
 	m_pDeviceContext->OMSetRenderTargets(1, views, nullptr);
 
-	static const FLOAT BackColor[4]{ 0.25f, 0.25f, 0.25f, 1.0f };
+	static const FLOAT BackColor[4]{ 0.6f, 0.4f, 0.4f, 1.0f };
 	m_pDeviceContext->ClearRenderTargetView(m_pPostProcess->getBufferRTV(), BackColor);
 	//m_pDeviceContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
@@ -457,6 +464,25 @@ bool Renderer::render() {
 		ImGui::Text("Statistics:");
 
 		ImGui::Text("Average BVH traverse time (ms): %.3f", m_geomGPUAvgTime);
+
+		ImGui::End();
+	}
+
+	{
+		ImGui::Begin("Mortons");
+
+		XMINT4 highlights{ m_highlights };
+
+		ImGui::DragInt("Morton primitive id", &highlights.x, 1, 0, m_pGeom->bvh.m_triCnt - 1);
+		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.x].primId);
+		ImGui::Text(" ");
+		ImGui::DragInt("Morton primitive 2 id", &highlights.y, 1, 0, m_pGeom->bvh.m_triCnt - 1);
+		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.y].primId);
+		ImGui::Text(" ");
+		ImGui::DragInt("Morton primitive 3 id", &highlights.z, 1, 0, m_pGeom->bvh.m_triCnt - 1);
+		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.z].primId);
+
+		m_highlights = highlights;
 
 		ImGui::End();
 	}

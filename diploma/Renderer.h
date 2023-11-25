@@ -47,6 +47,7 @@ class Renderer {
 		DirectX::SimpleMath::Matrix pvInv{};
 		DirectX::XMINT4 instsAlgLeafsTCheck{ 1, 2, 1, 1 };
 		DirectX::SimpleMath::Vector4 camDir{};
+		DirectX::XMINT4 highligths{};
 	};
 	RTBuffer m_rtBuffer{};
 	ID3D11Buffer* m_pRTBuffer{};
@@ -68,6 +69,7 @@ class Renderer {
 	Geometry* m_pGeom{};
 	double m_geomCPUAvgTime{};
 	double m_geomGPUAvgTime{};
+	DirectX::XMINT4 m_highlights{ 0, 0, 0, -1};
 
 	bool m_isModelRotate{};
 

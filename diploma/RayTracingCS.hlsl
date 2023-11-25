@@ -24,6 +24,7 @@ cbuffer RTBuffer: register(b4) {
     float4x4 vpInv;
     int4 instsAlgLeafsTCheck;
     float4 camDir;
+    int4 highlights;
 }
 
 struct AABB {
@@ -318,6 +319,21 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     
     if (best.t <= whnf.z || whnf.w <= best.t)
         return;
+    
+    if (best.tId == highlights.x) {
+        texOutput[DTid.xy] = float4(1.f, 0.f, 0.f, 0.f);
+        return;
+    }
+    
+    if (best.tId == highlights.y) {
+        texOutput[DTid.xy] = float4(0.f, 1.f, 0.f, 0.f);
+        return;
+    }
+    
+    if (best.tId == highlights.z) {
+        texOutput[DTid.xy] = float4(0.f, 0.f, 1.f, 0.f);
+        return;
+    }
     
     // depth view
     float depth = best.t * dot(ray.dir, camDir);

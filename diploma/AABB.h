@@ -51,4 +51,14 @@ struct AABB {
         DirectX::SimpleMath::Vector4 e{ bmax - bmin };
         return e.x * e.y + e.y * e.z + e.z * e.x;
     }
+
+    inline DirectX::SimpleMath::Vector4 relateVecPos(
+        const DirectX::SimpleMath::Vector4& v
+    ) const {
+        DirectX::SimpleMath::Vector4 o{ v - bmin };
+        if (bmax.x > bmin.x) o.x /= bmax.x - bmin.x;
+        if (bmax.y > bmin.y) o.y /= bmax.y - bmin.y;
+        if (bmax.z > bmin.z) o.z /= bmax.z - bmin.z;
+        return o;
+    }
 };
