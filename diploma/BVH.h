@@ -15,23 +15,12 @@ using namespace DirectX::SimpleMath;
 #define MaxSteps 32
 
 class BVH {
-	struct Triangle {
+	struct Primitive {
 		Vector4 v0{}, v1{}, v2{};
 		Vector4 ctr{};
+		AABB bb{};
 	};
-	std::vector<Triangle> m_tris{};
-
-	void mortonSort();
-	UINT mortonShift(UINT x) {
-		x = (x | (x << 16)) & 0b00000011000000000000000011111111;
-		x = (x | (x << 8)) & 0b00000011000000001111000000001111;
-		x = (x | (x << 4)) & 0b00000011000011000011000011000011;
-		x = (x | (x << 2)) & 0b00001001001001001001001001001001;
-		return x;
-	}
-	UINT encodeMorton(const Vector4& v) {
-		return (mortonShift(v.z) << 2) | (mortonShift(v.y) << 1) | mortonShift(v.x);
-	}
+	std::vector<Primitive> m_prims{};
 
 public:
 	struct BVHNode {
@@ -39,15 +28,10 @@ public:
 		XMINT4 leftCntPar{};
 	};
 	std::vector<BVHNode> m_nodes{};
-	std::vector<XMINT4> m_triIds{};
+	std::vector<XMINT4> m_primIds{};
+	std::vector<XMINT4> m_carcass{};
 
-	struct MortonPrim {
-		int primId{};
-		UINT mortonCode{};
-	};
-	std::vector<MortonPrim> m_mortonPrims{};
-
-	INT m_triCnt{};
+	INT m_primsCnt{};
 
 	INT m_nodesUsed{ 1 };
 	INT m_leafs{};
@@ -58,13 +42,28 @@ public:
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 8 };
 
-	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
+	float m_carcassPart{ 0.1f };
+	float m_carcassUniform{ 0.f };
 
+	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 	void build();
-	void buildStochastic() {
-	}
+
+	struct MortonPrim {
+		int primId{};
+		UINT mortonCode{};
+	};
+	std::vector<MortonPrim> m_mortonPrims{};
+
+	void initStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
+	void buildStochastic();
 
 private:
+	// stochastic
+	void mortonSort();
+	UINT mortonShift(UINT x);
+	UINT encodeMorton(const Vector4& v);
+
+	// sah, binned & other
 	void updateDepths(INT id);
 
 	float comp(Vector4 v, INT idx);

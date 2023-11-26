@@ -31,7 +31,7 @@ struct AABB {
         };
     }
 
-    inline DirectX::SimpleMath::Vector4 extent() const {
+    inline DirectX::SimpleMath::Vector4 diagonal() const {
         return bmax - bmin;
     }
 
@@ -47,8 +47,8 @@ struct AABB {
         }
     }
 
-    inline float area() {
-        DirectX::SimpleMath::Vector4 e{ bmax - bmin };
+    inline float area() const {
+        DirectX::SimpleMath::Vector4 e{ diagonal() };
         return e.x * e.y + e.y * e.z + e.z * e.x;
     }
 

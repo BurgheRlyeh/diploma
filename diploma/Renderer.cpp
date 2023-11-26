@@ -410,6 +410,16 @@ bool Renderer::render() {
 
 		ImGui::Text(" ");
 
+		float carcassPart{ 100.f * m_pGeom->bvh.m_carcassPart };
+		ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 0.f, 100.f);
+		m_pGeom->bvh.m_carcassPart = carcassPart / 100.f;
+
+		float carcassUniform{ 100.f * m_pGeom->bvh.m_carcassUniform };
+		ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
+		m_pGeom->bvh.m_carcassUniform = carcassUniform / 100.f;
+
+		ImGui::Text(" ");
+
 		ImGui::Text("Statistics:");
 
 		ImGui::Text("Average BVH time (ms): %.3f", m_geomCPUAvgTime);
@@ -417,8 +427,8 @@ bool Renderer::render() {
 		ImGui::Text("Nodes: %d", m_pGeom->bvh.m_nodesUsed);
 		ImGui::Text("Leafs: %d", m_pGeom->bvh.m_leafs);
 		ImGui::Text(" ");
-		ImGui::Text("Primitives: %d", m_pGeom->bvh.m_triCnt);
-		ImGui::Text("Average primitives per leaf: %.3f", 1.f * m_pGeom->bvh.m_triCnt / m_pGeom->bvh.m_leafs);
+		ImGui::Text("Primitives: %d", m_pGeom->bvh.m_primsCnt);
+		ImGui::Text("Average primitives per leaf: %.3f", 1.f * m_pGeom->bvh.m_primsCnt / m_pGeom->bvh.m_leafs);
 		ImGui::Text(" ");
 		ImGui::Text("Min depth: %d", m_pGeom->bvh.m_depthMin);
 		ImGui::Text("Max depth: %d", m_pGeom->bvh.m_depthMax);
@@ -473,13 +483,13 @@ bool Renderer::render() {
 
 		XMINT4 highlights{ m_highlights };
 
-		ImGui::DragInt("Morton primitive id", &highlights.x, 1, 0, m_pGeom->bvh.m_triCnt - 1);
+		ImGui::DragInt("Morton primitive id", &highlights.x, 1, 0, m_pGeom->bvh.m_primsCnt - 1);
 		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.x].primId);
 		ImGui::Text(" ");
-		ImGui::DragInt("Morton primitive 2 id", &highlights.y, 1, 0, m_pGeom->bvh.m_triCnt - 1);
+		ImGui::DragInt("Morton primitive 2 id", &highlights.y, 1, 0, m_pGeom->bvh.m_primsCnt - 1);
 		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.y].primId);
 		ImGui::Text(" ");
-		ImGui::DragInt("Morton primitive 3 id", &highlights.z, 1, 0, m_pGeom->bvh.m_triCnt - 1);
+		ImGui::DragInt("Morton primitive 3 id", &highlights.z, 1, 0, m_pGeom->bvh.m_primsCnt - 1);
 		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.z].primId);
 
 		m_highlights = highlights;

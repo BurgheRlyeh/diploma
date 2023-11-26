@@ -320,26 +320,30 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     if (best.t <= whnf.z || whnf.w <= best.t)
         return;
     
-    if (best.tId == highlights.x) {
-        texOutput[DTid.xy] = float4(1.f, 0.f, 0.f, 0.f);
-        return;
-    }
-    
-    if (best.tId == highlights.y) {
-        texOutput[DTid.xy] = float4(0.f, 1.f, 0.f, 0.f);
-        return;
-    }
-    
-    if (best.tId == highlights.z) {
-        texOutput[DTid.xy] = float4(0.f, 0.f, 1.f, 0.f);
-        return;
-    }
-    
     // depth view
     float depth = best.t * dot(ray.dir, camDir);
         
-    float4 colorNear = float4(1.f, 1.f, 1.f, 1.f);
-    float4 colorFar = float4(0.f, 0.f, 0.f, 1.f);
+    float4 colorNear = float4(0.25f, 0.25f, 0.25f, 1.f);
+    float4 colorFar = float4(0.75f, 0.75f, 0.75f, 1.f);
         
-    texOutput[DTid.xy] = lerp(colorNear, colorFar, 1.f - 1.f / depth);
+    float4 color = lerp(colorNear, colorFar, 1.f - 1.f / depth);
+    
+    if (triIdx[best.tId].y == 1) {
+        color.x += (1.f - color.x) / 0.5f;
+    }
+    
+    if (best.tId == highlights.x) {
+        color.x += (1.f - color.x) / 4.f;
+        color.yz -= (float2(1.f, 1.f) - color.yz) / 2.f;
+    }
+    if (best.tId == highlights.y) {
+        color.y += (1.f - color.y) / 4.f;
+        color.xz -= (float2(1.f, 1.f) - color.xz) / 2.f;
+    }
+    if (best.tId == highlights.z) {
+        color.z += (1.f - color.z) / 4.f;
+        color.xy -= (float2(1.f, 1.f) - color.xy) / 2.f;
+    }
+    
+    texOutput[DTid.xy] = color;
 }
