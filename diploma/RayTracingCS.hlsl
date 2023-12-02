@@ -1,6 +1,9 @@
 #define LIMIT_V 1013
 #define LIMIT_I 1107
 
+//#define LIMIT_V 24
+//#define LIMIT_I 36
+
 cbuffer VtsConstBuffer: register(b0) {
     float4 vertices[LIMIT_V];
 }

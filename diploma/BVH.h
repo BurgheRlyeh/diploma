@@ -28,7 +28,7 @@ public:
 		XMINT4 leftCntPar{};
 	};
 	std::vector<BVHNode> m_nodes{};
-	std::vector<XMINT4> m_primIds{};
+	std::vector<XMINT4> m_primIdCarcass{};
 	std::vector<XMINT4> m_carcass{};
 
 	INT m_primsCnt{};
@@ -43,7 +43,7 @@ public:
 	INT m_sahSteps{ 8 };
 
 	float m_carcassPart{ 0.1f };
-	float m_carcassUniform{ 0.f };
+	float m_uniform{ 0.f };
 
 	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 	void build();

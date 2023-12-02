@@ -414,9 +414,9 @@ bool Renderer::render() {
 		ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 0.f, 100.f);
 		m_pGeom->bvh.m_carcassPart = carcassPart / 100.f;
 
-		float carcassUniform{ 100.f * m_pGeom->bvh.m_carcassUniform };
+		float carcassUniform{ 100.f * m_pGeom->bvh.m_uniform };
 		ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
-		m_pGeom->bvh.m_carcassUniform = carcassUniform / 100.f;
+		m_pGeom->bvh.m_uniform = carcassUniform / 100.f;
 
 		ImGui::Text(" ");
 

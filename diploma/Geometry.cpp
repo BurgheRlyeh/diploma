@@ -13,10 +13,11 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 void Geometry::ModelBuffer::updateMatrices() {
-	mModel = Matrix::CreateScale(3.f)
-		* Matrix::CreateRotationX(-XM_PIDIV2)
-		* Matrix::CreateRotationY(posAngle.w)
-		* Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
+	mModel =
+		Matrix::CreateScale(3.f) * 
+		Matrix::CreateRotationX(-XM_PIDIV2) * 
+		Matrix::CreateRotationY(posAngle.w) * 
+		Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
 	mModelInv = mModel.Invert();
 }
 
@@ -202,7 +203,7 @@ void Geometry::updateBVH() {
 	m_pCPUTimer->stop();
 
 	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, bvh.m_nodes.data(), 0, 0);
-	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, bvh.m_primIds.data(), 0, 0);
+	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, bvh.m_primIdCarcass.data(), 0, 0);
 }
 
 void Geometry::resizeUAV(ID3D11Texture2D* tex) {

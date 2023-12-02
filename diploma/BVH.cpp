@@ -11,7 +11,7 @@ void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMa
 	m_depthMax = -1;
 
 	m_prims.resize(m_primsCnt);
-	m_primIds.resize(m_primsCnt);
+	m_primIdCarcass.resize(m_primsCnt);
 	m_nodes.resize(2 * m_primsCnt - 1);
 
 	for (INT i{}; i < m_primsCnt; ++i) {
@@ -25,7 +25,7 @@ void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMa
 		m_prims[i].bb.grow(m_prims[i].v1);
 		m_prims[i].bb.grow(m_prims[i].v2);
 
-		m_primIds[i] = { i, 0, 0, 0 };
+		m_primIdCarcass[i] = { i, 0, 0, 0 };
 	}
 }
 
@@ -38,6 +38,8 @@ void BVH::build() {
 	//mortonSort();
 	buildStochastic();
 	subdivide(0);
+
+	m_primIdCarcass[0] = m_primIdCarcass[0];
 }
 
 void BVH::initStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
@@ -49,7 +51,7 @@ void BVH::initStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matr
 	m_depthMax = -1;
 
 	m_prims.resize(m_primsCnt);
-	m_primIds.resize(m_primsCnt);
+	m_primIdCarcass.resize(m_primsCnt);
 	m_nodes.resize(2 * m_primsCnt - 1);
 
 	for (INT i{}; i < m_primsCnt; ++i) {
@@ -63,97 +65,85 @@ void BVH::initStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matr
 		m_prims[i].bb.grow(m_prims[i].v1);
 		m_prims[i].bb.grow(m_prims[i].v2);
 
-		m_primIds[i] = { i, 0, 0, 0 };
+		m_primIdCarcass[i] = { i, 0, 0, 0 };
 	}
 }
 
 void BVH::buildStochastic() {
 	mortonSort();
 
-	// Primitive weights & CDF
+	// init weights
 	std::vector<float> cdf(m_primsCnt);
 	float sum{};
+	float wmin{ std::numeric_limits<float>::max() };
+	float wmax{ std::numeric_limits<float>::min() };
 	for (int i{}; i < m_primsCnt; ++i) {
-		sum += (cdf[i] = m_prims[i].bb.area());
+		sum += (cdf[i] = m_prims[m_mortonPrims[i].primId].bb.area());
+		wmin = std::min<float>(wmin, cdf[i]);
+		wmax = std::max<float>(wmax, cdf[i]);
 	}
 
-	// algorithm 1
-	{
-		const float BIN_BASE{ std::sqrtf(2.f) };
-		const int BIN_OFFSET{ 32 };
-		const int BIN_COUNT{ 64 };
+	// algorithm 1: histogram weight clamping
+	const float BASE{ 1.1f };	// default = sqrtf(2.f)
+	const int OFFSET{ 48 };		// default = 32
+	const int BIN_CNT{ 64 };	// default = 64
 
-		int bin_counts[BIN_COUNT]{};
+	int bin_cnts[BIN_CNT]{};
 
-		for (int i{}; i < m_primsCnt; ++i) {
-			float w = cdf[i];
-			if (w == 0) continue;
-			size_t bin;
-			if (w == std::numeric_limits<float>::infinity())
-				bin = BIN_COUNT - 1;
-			else {
-				bin = std::min<float>(BIN_COUNT - 1.f, std::max<float>(0.f,
-					BIN_OFFSET + std::floor(std::log(w) / std::log(BIN_BASE))
-				));
-			}
-			++bin_counts[bin];
+	// histogram building
+	for (int i{}; i < m_primsCnt; ++i) {
+		++bin_cnts[static_cast<size_t>(std::min<float>(
+			std::max<float>(
+				OFFSET + std::floor(std::log(cdf[i]) / std::log(BASE)),
+				0.f
+			),
+			BIN_CNT - 1.f
+		))];
+	}
+
+
+	// primitive probability, compensate uniformity
+	float s{ 1.f / (m_primsCnt * m_carcassPart) };
+	s = (s - m_uniform / m_primsCnt) / (1 - m_uniform);
+
+	// unclamped & clamped sums, clamp
+	float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
+	float clamp{ std::numeric_limits<float>::infinity() };
+
+	// selection of clamp
+	for (int i{}; i < BIN_CNT - 1; ++i) {
+		float c{ powf(BASE, i - OFFSET + 1) };
+		if (c / (uSum + clamp * cSum) >= s) {
+			clamp = c;
+			break;
 		}
+		uSum += clamp * bin_cnts[i];
+		cSum -= bin_cnts[i];
+	}
 
-		float s{ 1.f / (m_primsCnt * m_carcassPart) };
-		
-		// compensate uniformity
-		s = (s - m_carcassUniform / m_primsCnt) / (1 - m_carcassUniform);
-
-		float uSum{};
-		float cSum{ static_cast<float>(m_primsCnt) };
-		float clamp;
-
-		for (int i{}; i < BIN_COUNT; ++i) {
-			if (i == BIN_COUNT - 1) {
-				clamp = std::numeric_limits<float>::infinity();
-				break;
-			}
-			clamp = pow(BIN_BASE, i - BIN_OFFSET + 1);
-			if (clamp / (uSum + clamp * cSum) >= s) break;
-			uSum += clamp * bin_counts[i];
-			cSum -= bin_counts[i];
-		}
-
+	// reweighting if found
+	if (clamp != std::numeric_limits<float>::infinity()) {
 		sum = 0.f;
-		for (int i{}; i < m_primsCnt; ++i) {
+		for (int i{}; i < m_primsCnt; ++i)
 			sum += cdf[i] = std::min(cdf[i], clamp);
-		}
 	}
 
-	float pfix{};
-	for (int i{}; i < m_primsCnt; ++i) {
-		// uniformity
-		//pfix += cdf[i] * (1.f - m_carcassUniform) + sum * m_carcassUniform / m_primsCnt;
-		pfix += cdf[i] - m_carcassUniform * (cdf[i] + sum / m_primsCnt);
-		cdf[i] = pfix;
+	// reweighting with uniform dist
+	cdf[0] = cdf[0] * (1.f - m_uniform) + sum * m_uniform / m_primsCnt;
+	for (int i{ 1 }; i < m_primsCnt; ++i) {
+		cdf[i] = cdf[i - 1] + cdf[i] * (1.f - m_uniform) + sum * m_uniform / m_primsCnt;
 	}
-	sum = pfix;
+	sum = cdf[m_primsCnt - 1];
 
-	// subset
-	int subsetSize{ static_cast<int>(std::round(m_primsCnt * m_carcassPart)) };
-	std::vector<bool> subsetSelect(m_primsCnt);
-	std::fill(subsetSelect.begin(), subsetSelect.end(), false);
+	// selecting for carcass
+	int carcassSize{ static_cast<int>(std::round(m_primsCnt * m_carcassPart)) };
+	for (int i{}; i < carcassSize - 1; ++i) {
+		float prob{ (i + 0.5f) / carcassSize };
+		float probCdf{ prob * sum };
 
-	m_carcass.resize(m_primsCnt);
-	std::fill(m_carcass.begin(), m_carcass.end(), XMINT4{ 0, 0, 0, 0 });
-
-	for (int i{ 1 }; i < subsetSize; ++i) {
-		float rnd{ static_cast<float>(i) / subsetSize };
-
-		auto it = std::upper_bound(cdf.begin(), cdf.end() - 1, rnd * sum);
-		auto j = it - cdf.begin();
-		subsetSelect[j] = true; 
-		
-		m_carcass[j].x = 1;
-		m_primIds[j].y = 1;
+		auto first = std::upper_bound(cdf.begin(), cdf.end() - 1, prob * sum);
+		m_primIdCarcass[m_mortonPrims[first - cdf.begin()].primId].y = 1;
 	}
-
-	m_carcass[0] = m_carcass[0];
 }
 
 void BVH::mortonSort() {
@@ -181,6 +171,8 @@ void BVH::mortonSort() {
 			return mp1.mortonCode < mp2.mortonCode;
 		}
 	);
+
+	m_mortonPrims[0] = m_mortonPrims[0];
 }
 
 UINT BVH::mortonShift(UINT x) {
@@ -217,7 +209,7 @@ void BVH::updateNodeBounds(INT nodeIdx) {
 	BVHNode& node = m_nodes[nodeIdx];
 	node.bb = {};
 	for (INT i{}; i < node.leftCntPar.y; ++i) {
-		Primitive& leafTri = m_prims[m_primIds[node.leftCntPar.x + i].x];
+		Primitive& leafTri = m_prims[m_primIdCarcass[node.leftCntPar.x + i].x];
 
 		node.bb.grow(leafTri.v0);
 		node.bb.grow(leafTri.v1);
@@ -236,7 +228,7 @@ float BVH::evaluateSAH(BVHNode& node, int axis, float pos) {
 	AABB leftBox{}, rightBox{};
 	int leftCnt{}, rightCnt{};
 	for (int i{}; i < node.leftCntPar.y; ++i) {
-		Primitive& t = m_prims[m_primIds[node.leftCntPar.x + i].x];
+		Primitive& t = m_prims[m_primIdCarcass[node.leftCntPar.x + i].x];
 
 		if (comp(t.ctr, axis) < pos) {
 			++leftCnt;
@@ -259,7 +251,7 @@ float BVH::splitSAH(BVHNode& node, int& axis, float& splitPos) {
 	float bestCost{ std::numeric_limits<float>::max() };
 	for (int a{}; a < 3; ++a) {
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			Primitive& t = m_prims[m_primIds[node.leftCntPar.x + i].x];
+			Primitive& t = m_prims[m_primIdCarcass[node.leftCntPar.x + i].x];
 			Vector4 center{ t.ctr };
 			float pos = comp(center, a);
 			float cost = evaluateSAH(node, a, pos);
@@ -311,7 +303,7 @@ float BVH::splitBinnedSAH(BVHNode& node, int& axis, float& splitPos) {
 
 		float step = m_sahSteps / (bmax - bmin);
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			Primitive& t = m_prims[m_primIds[node.leftCntPar.x + i].x];
+			Primitive& t = m_prims[m_primIdCarcass[node.leftCntPar.x + i].x];
 			int id{ std::min(
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) * step)
@@ -390,8 +382,11 @@ void BVH::subdivide(INT nodeId) {
 	INT i{ node.leftCntPar.x };
 	INT j{ i + node.leftCntPar.y - 1 };
 	while (i <= j) {
-		if (splitPos <= comp(m_prims[m_primIds[i++].x].ctr, axis))
-			std::swap(m_primIds[--i].x, m_primIds[j--].x);
+		if (splitPos <= comp(m_prims[m_primIdCarcass[i++].x].ctr, axis))
+			std::swap(
+				m_primIdCarcass[--i].x,
+				m_primIdCarcass[j--].x
+			);
 	}
 
 	// abort split if one of the sides is empty
@@ -428,3 +423,37 @@ void BVH::subdivide(INT nodeId) {
 	subdivide(leftIdx);
 	subdivide(rightIdx);
 }
+
+
+/**
+* apply a matrix to a box
+* note that the resulting box will be axis aligned as well
+* therefore the resulting box may be larger than the previous 
+*
+* @param box the box to transform
+* @param mat the trnsformation matrix to apply
+*/
+//Box transform(const Box& box, const Matrix& mat) {
+//	float av, bv;
+//	int   i, j;
+//	Box new_box(
+//		mat.m[12], mat.m[13], mat.m[14],
+//		mat.m[12], mat.m[13], mat.m[14]
+//	);
+//	for (i = 0; i < 3; i++)	
+//		for (j = 0; j < 3; j++) {
+//			av = mat.element(i, j) * box.min[j];		
+//			bv = mat.element(i, j) * box.max[j];		
+//			if (av < bv) {
+//				new_box.min += av;			
+//				new_box.max += bv;
+//			}
+//			else {
+//				new_box.min += bv;			
+//				new_box.max += av;
+//			}
+//		}
+//	return new_box;
+//};
+/*
+where box.max and box.min are the two corner vectors of the AABB and matrix.m is the OpenGL style representation of a 4x4 matrix.*/
