@@ -28,13 +28,15 @@ public:
 		XMINT4 leftCntPar{};
 	};
 	std::vector<BVHNode> m_nodes{};
-	std::vector<XMINT4> m_primIdCarcass{};
-	std::vector<XMINT4> m_carcass{};
+	//std::vector<BVHNode> m_internals{};
+	//std::vector<BVHNode> m_leafs{};
+	std::vector<XMINT4> m_primFrm{};
+	std::vector<XMINT4> m_stoh{};
 
 	INT m_primsCnt{};
 
 	INT m_nodesUsed{ 1 };
-	INT m_leafs{};
+	INT m_leafsCnt{};
 	INT m_depthMin{ 2 * 1107 - 1 };
 	INT m_depthMax{ -1 };
 
@@ -42,8 +44,10 @@ public:
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 8 };
 
-	float m_carcassPart{ 0.1f };
+	float m_frmPart{ 0.1f };
 	float m_uniform{ 0.f };
+
+	int m_primsInBVH{};
 
 	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 	void build();
@@ -54,7 +58,6 @@ public:
 	};
 	std::vector<MortonPrim> m_mortonPrims{};
 
-	void initStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 	void buildStochastic();
 
 private:
@@ -62,6 +65,9 @@ private:
 	void mortonSort();
 	UINT mortonShift(UINT x);
 	UINT encodeMorton(const Vector4& v);
+
+	float primInsertMetric(int primId, int nodeId);
+	int findBestLeaf(int primId);
 
 	// sah, binned & other
 	void updateDepths(INT id);
@@ -81,4 +87,7 @@ private:
 	float splitBinnedSAH(BVHNode& node, int& axis, float& splitPos);
 
 	void subdivide(INT nodeId);
+
+	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos);
+	void subdivieStochastic(int nodeId);
 };

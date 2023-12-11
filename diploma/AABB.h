@@ -61,4 +61,11 @@ struct AABB {
         if (bmax.z > bmin.z) o.z /= bmax.z - bmin.z;
         return o;
     }
+
+    static inline AABB bbUnion(const AABB& bb1, const AABB& bb2) {
+        return AABB{
+            DirectX::SimpleMath::Vector4::Min(bb1.bmin, bb2.bmin),
+            DirectX::SimpleMath::Vector4::Max(bb1.bmax, bb2.bmax)
+        };
+    }
 };

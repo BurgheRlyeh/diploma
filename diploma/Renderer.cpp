@@ -410,9 +410,9 @@ bool Renderer::render() {
 
 		ImGui::Text(" ");
 
-		float carcassPart{ 100.f * m_pGeom->bvh.m_carcassPart };
+		float carcassPart{ 100.f * m_pGeom->bvh.m_frmPart };
 		ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 0.f, 100.f);
-		m_pGeom->bvh.m_carcassPart = carcassPart / 100.f;
+		m_pGeom->bvh.m_frmPart = carcassPart / 100.f;
 
 		float carcassUniform{ 100.f * m_pGeom->bvh.m_uniform };
 		ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
@@ -425,10 +425,10 @@ bool Renderer::render() {
 		ImGui::Text("Average BVH time (ms): %.3f", m_geomCPUAvgTime);
 		ImGui::Text(" ");
 		ImGui::Text("Nodes: %d", m_pGeom->bvh.m_nodesUsed);
-		ImGui::Text("Leafs: %d", m_pGeom->bvh.m_leafs);
+		ImGui::Text("Leafs: %d", m_pGeom->bvh.m_leafsCnt);
 		ImGui::Text(" ");
 		ImGui::Text("Primitives: %d", m_pGeom->bvh.m_primsCnt);
-		ImGui::Text("Average primitives per leaf: %.3f", 1.f * m_pGeom->bvh.m_primsCnt / m_pGeom->bvh.m_leafs);
+		ImGui::Text("Average primitives per leaf: %.3f", 1.f * m_pGeom->bvh.m_primsCnt / m_pGeom->bvh.m_leafsCnt);
 		ImGui::Text(" ");
 		ImGui::Text("Min depth: %d", m_pGeom->bvh.m_depthMin);
 		ImGui::Text("Max depth: %d", m_pGeom->bvh.m_depthMax);
@@ -461,7 +461,7 @@ bool Renderer::render() {
 			ImGui::Text(" ");
 
 			bool isProcessLeafs{ m_rtBuffer.instsAlgLeafsTCheck.z == 1 };
-			ImGui::Checkbox("Process m_leafs", &isProcessLeafs);
+			ImGui::Checkbox("Process m_leafsCnt", &isProcessLeafs);
 			m_rtBuffer.instsAlgLeafsTCheck.z = isProcessLeafs ? 1 : 0;
 
 			bool isTCheck{ m_rtBuffer.instsAlgLeafsTCheck.w == 1 };
