@@ -203,7 +203,7 @@ void Geometry::updateBVH() {
 	m_pCPUTimer->stop();
 
 	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, bvh.m_nodes.data(), 0, 0);
-	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, bvh.m_primFrm.data(), 0, 0);
+	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, bvh.m_bvhPrims.data(), 0, 0);
 }
 
 void Geometry::resizeUAV(ID3D11Texture2D* tex) {

@@ -19,7 +19,7 @@ cbuffer ModelBuffer: register(b2) {
 }
 
 cbuffer TrianglesIDs: register(b3) {
-    int4 triIdx[LIMIT_I];
+    uint4 triIdx[LIMIT_I];
 }
 
 cbuffer RTBuffer: register(b4) {

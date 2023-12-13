@@ -293,9 +293,9 @@ void Renderer::update() {
 		(f / f.w - n / n.w).Normalize(m_rtBuffer.camDir);
 
 		m_rtBuffer.highligths = {
-			m_pGeom->bvh.m_mortonPrims[m_highlights.x].primId,
-			m_pGeom->bvh.m_mortonPrims[m_highlights.y].primId,
-			m_pGeom->bvh.m_mortonPrims[m_highlights.z].primId,
+			static_cast<int>(m_pGeom->bvh.m_bvhPrims[m_highlights.x].x),
+			static_cast<int>(m_pGeom->bvh.m_bvhPrims[m_highlights.y].x),
+			static_cast<int>(m_pGeom->bvh.m_bvhPrims[m_highlights.z].x),
 			-1
 		};
 
@@ -484,13 +484,13 @@ bool Renderer::render() {
 		XMINT4 highlights{ m_highlights };
 
 		ImGui::DragInt("Morton primitive id", &highlights.x, 1, 0, m_pGeom->bvh.m_primsCnt - 1);
-		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.x].primId);
+		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_bvhPrims[highlights.x].x);
 		ImGui::Text(" ");
 		ImGui::DragInt("Morton primitive 2 id", &highlights.y, 1, 0, m_pGeom->bvh.m_primsCnt - 1);
-		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.y].primId);
+		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_bvhPrims[highlights.y].x);
 		ImGui::Text(" ");
 		ImGui::DragInt("Morton primitive 3 id", &highlights.z, 1, 0, m_pGeom->bvh.m_primsCnt - 1);
-		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_mortonPrims[highlights.z].primId);
+		ImGui::Text("Buffer primitive id: %i", m_pGeom->bvh.m_bvhPrims[highlights.z].x);
 
 		m_highlights = highlights;
 

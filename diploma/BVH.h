@@ -3,6 +3,7 @@
 #include "framework.h"
 
 #include "AABB.h"
+#include <list>
 
 struct AABB;
 
@@ -28,10 +29,16 @@ public:
 		XMINT4 leftCntPar{};
 	};
 	std::vector<BVHNode> m_nodes{};
-	//std::vector<BVHNode> m_internals{};
-	//std::vector<BVHNode> m_leafs{};
-	std::vector<XMINT4> m_primFrm{};
-	std::vector<XMINT4> m_stoh{};
+	std::list<XMUINT4> m_primMortonFrmLeaf{};
+	std::list<XMUINT4> m_frm{};
+	std::vector<std::list<XMUINT4>::iterator> m_frmIts{};
+
+	std::vector<XMUINT4> m_bvhPrims{};
+
+	std::list<XMUINT4>::iterator m_edge{};
+	std::vector<std::list<XMUINT4>::iterator> m_iters{};
+
+
 
 	INT m_primsCnt{};
 
@@ -52,12 +59,6 @@ public:
 	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 	void build();
 
-	struct MortonPrim {
-		int primId{};
-		UINT mortonCode{};
-	};
-	std::vector<MortonPrim> m_mortonPrims{};
-
 	void buildStochastic();
 
 private:
@@ -68,6 +69,46 @@ private:
 
 	float primInsertMetric(int primId, int nodeId);
 	int findBestLeaf(int primId);
+
+	template <typename T>
+	void preForEach(int nodeId, T f) {
+		f(nodeId);
+
+		if (!m_nodes[nodeId].leftCntPar.y) {
+			preForEach(m_nodes[nodeId].leftCntPar.x, f);
+			preForEach(m_nodes[nodeId].leftCntPar.x + 1, f);
+		}
+	}
+
+	template <typename T>
+	void postForEach(int nodeId, T f) {
+		if (!m_nodes[nodeId].leftCntPar.y) {
+			postForEach(m_nodes[nodeId].leftCntPar.x, f);
+			postForEach(m_nodes[nodeId].leftCntPar.x + 1, f);
+		}
+
+		f(nodeId);
+	}
+
+	void foo(int nodeId, int* offsets, int* id, int* first) {
+		//if (m_nodesUsed <= id) 
+
+		if (m_nodes[nodeId].leftCntPar.y) {
+			m_nodes[nodeId].leftCntPar.x += *first;
+			m_nodes[nodeId].leftCntPar.y += offsets[*id];
+			*first += offsets[*id];
+			offsets[*id] = 0;
+			*id += 1;
+			return;
+		}
+
+		foo(m_nodes[nodeId].leftCntPar.x, offsets, id, first);
+		foo(m_nodes[nodeId].leftCntPar.x + 1, offsets, id, first);
+	}
+
+	void subdivideStoh(INT nodeId);
+	void updateNodeBoundsStoh(INT nodeIdx);
+	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
 
 	// sah, binned & other
 	void updateDepths(INT id);
@@ -85,9 +126,6 @@ private:
 	float splitFixedStepSAH(BVHNode& node, int& axis, float& pos);
 
 	float splitBinnedSAH(BVHNode& node, int& axis, float& splitPos);
-
+	
 	void subdivide(INT nodeId);
-
-	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos);
-	void subdivieStochastic(int nodeId);
 };
