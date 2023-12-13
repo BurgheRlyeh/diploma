@@ -155,7 +155,11 @@ void BVH::buildStochastic() {
 		BVHNode& node{ m_nodes[leaf] };
 		int first{ node.leftCntPar.x };
 		int last{ first + node.leftCntPar.y - 1 };
-		it = m_frmIts[node.leftCntPar.x + 1];
+		//it = m_frmIts[node.leftCntPar.x + 1];
+		it = m_frmIts[m_frm[(*m_frmIts[node.leftCntPar.x]).z].z + 1];
+
+		// m_frm[m_primMortonFrmLeaf[node.leftCntPar.x].z] + 1
+
 		++offsets[node.leftCntPar.x];
 		//if (first != last) {
 		//	++offsets[last];
@@ -198,12 +202,12 @@ void BVH::buildStochastic() {
 		}
 	});
 
-	//preForEach(0, [&](int nodeId) {
-	//	if (!m_nodes[nodeId].leftCntPar.y) return;
-	//		
-	//	updateNodeBoundsStoh(nodeId);
-	//	subdivideStoh(nodeId);
-	//});
+	//int aba{};
+	postForEach(0, [&](int nodeId) {
+		if (m_nodes[nodeId].leftCntPar.y)
+			subdivideStoh2(nodeId);
+	});
+	
 	//for (int i{}; i < m_nodesUsed; ++i) {
 	//	if (m_nodes[i].leftCntPar.y) {
 	//		updateNodeBoundsStoh(i);
@@ -280,7 +284,7 @@ int BVH::findBestLeaf(int primId) {
 
 	// morton window
 	//const int MORTON_SEARCH_WINDOW{ 10 };
-	//auto frameNearest = m_primFrm[primId].y;
+	//auto frameNearest = m_frm[(*m_frmIts[primId]).z].y;
 	//auto b = std::max(frameNearest - MORTON_SEARCH_WINDOW, 0);
 	//auto e = std::min(m_primsCnt, frameNearest + MORTON_SEARCH_WINDOW);
 	//for (int i{ b }; i < e; ++i) {
@@ -296,9 +300,11 @@ void BVH::subdivideStoh(INT nodeId) {
 		auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
 		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
 			(*it).w = nodeId;
-			auto frmPrimIt = std::next(m_frm.begin(), (*it).z);
-			(*frmPrimIt).z = i;
-			(*frmPrimIt).w = nodeId;
+			m_frm[(*it).z].z = i;
+			m_frm[(*it).z].w = nodeId;
+			//auto frmPrimIt = std::next(m_frm.begin(), (*it).z);
+			//(*frmPrimIt).z = i;
+			//(*frmPrimIt).w = nodeId;
 			//while ((*m_edge).z == (*it).z && m_edge != m_primMortonFrmLeaf.end()) {
 			//	(*(m_edge++)).z = i;
 			//}
@@ -319,9 +325,11 @@ void BVH::subdivideStoh(INT nodeId) {
 		auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
 		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
 			(*it).w = nodeId;
-			auto frmPrimIt = std::next(m_frm.begin(), (*it).z);
-			(*frmPrimIt).z = i;
-			(*frmPrimIt).w = nodeId;
+			m_frm[(*it).z].z = i;
+			m_frm[(*it).z].w = nodeId;
+			//auto frmPrimIt = std::next(m_frm.begin(), (*it).z);
+			//(*frmPrimIt).z = i;
+			//(*frmPrimIt).w = nodeId;
 			//while ((*m_edge).z == (*it).z && m_edge != m_primMortonFrmLeaf.end()) {
 			//	(*(m_edge++)).z = i;
 			//}
@@ -361,6 +369,57 @@ void BVH::subdivideStoh(INT nodeId) {
 	// recurse
 	subdivideStoh(leftIdx);
 	subdivideStoh(rightIdx);
+}
+
+void BVH::subdivideStoh2(INT nodeId) {
+	BVHNode& node{ m_nodes[nodeId] };
+	if (node.leftCntPar.y < 2) {
+		//++m_leafsCnt;
+		//updateDepths(nodeId);
+		return;
+	}
+
+	// determine split axis and position
+	int axis{}, lCnt{}, rCnt{};
+	float splitPos{};
+	float cost{};
+	cost = splitBinnedSAHStoh(node, axis, splitPos, lCnt, rCnt);
+
+	if (m_alg != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
+		//++m_leafsCnt;
+		//updateDepths(nodeId);
+		return;
+	}
+
+	// in-place partition
+	for (auto l = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x),
+		r = std::next(l, node.leftCntPar.y - 1); l != r;)
+	{
+		if (splitPos <= comp(m_prims[(*(l)).x].ctr, axis))
+			std::swap((*(l)), (*(r--)));
+		else l++;
+	}
+
+	// create child nodes
+	int leftIdx{ m_nodesUsed++ };
+	m_nodes[leftIdx].leftCntPar = {
+		node.leftCntPar.x, lCnt, nodeId, 0
+	};
+	updateNodeBoundsStoh(leftIdx);
+
+	int rightIdx{ m_nodesUsed++ };
+	m_nodes[rightIdx].leftCntPar = {
+		node.leftCntPar.x + lCnt, rCnt, nodeId, 0
+	};
+	updateNodeBoundsStoh(rightIdx);
+
+	node.leftCntPar = {
+		leftIdx, 0, node.leftCntPar.z, 0
+	};
+
+	// recurse
+	subdivideStoh2(leftIdx);
+	subdivideStoh2(rightIdx);
 }
 
 float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt) {

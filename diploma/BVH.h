@@ -30,7 +30,7 @@ public:
 	};
 	std::vector<BVHNode> m_nodes{};
 	std::list<XMUINT4> m_primMortonFrmLeaf{};
-	std::list<XMUINT4> m_frm{};
+	std::vector<XMUINT4> m_frm{};
 	std::vector<std::list<XMUINT4>::iterator> m_frmIts{};
 
 	std::vector<XMUINT4> m_bvhPrims{};
@@ -107,6 +107,7 @@ private:
 	}
 
 	void subdivideStoh(INT nodeId);
+	void subdivideStoh2(INT nodeId);
 	void updateNodeBoundsStoh(INT nodeIdx);
 	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
 
