@@ -29,15 +29,19 @@ public:
 		XMINT4 leftCntPar{};
 	};
 	std::vector<BVHNode> m_nodes{};
-	std::list<XMUINT4> m_primMortonFrmLeaf{};
-	std::vector<XMUINT4> m_frm{};
-	std::vector<std::list<XMUINT4>::iterator> m_frmIts{};
-
+	// old, for shader 
 	std::vector<XMUINT4> m_bvhPrims{};
-
+	// new, for calc
+	std::list<XMUINT4> m_primMortonFrmLeaf{}; 
+	// for O(1) frame access
+	std::vector<std::list<XMUINT4>::iterator> m_frmIts{};
+	// frame copy with add info
+	std::vector<XMUINT4> m_frm{};
+	// frame edge
 	std::list<XMUINT4>::iterator m_edge{};
-	std::vector<std::list<XMUINT4>::iterator> m_iters{};
 
+
+	int m_frmSize{};
 
 
 	INT m_primsCnt{};

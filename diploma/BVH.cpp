@@ -150,21 +150,15 @@ void BVH::buildStochastic() {
 	offsets.resize(frmSize);
 
 	int added{};
+	m_frmSize = frmSize;
 	for (int i{ frmSize }; i < m_primsCnt; ++i) {
-		int leaf{ findBestLeaf((*m_edge).x) };
+		int leaf{ findBestLeaf((*m_edge).z) };
 		BVHNode& node{ m_nodes[leaf] };
 		int first{ node.leftCntPar.x };
 		int last{ first + node.leftCntPar.y - 1 };
-		//it = m_frmIts[node.leftCntPar.x + 1];
 		it = m_frmIts[m_frm[(*m_frmIts[node.leftCntPar.x]).z].z + 1];
 
-		// m_frm[m_primMortonFrmLeaf[node.leftCntPar.x].z] + 1
-
 		++offsets[node.leftCntPar.x];
-		//if (first != last) {
-		//	++offsets[last];
-		//}
-		++added;
 
 		m_primMortonFrmLeaf.insert(it, *m_edge);
 		auto del = m_edge++;
@@ -194,15 +188,13 @@ void BVH::buildStochastic() {
 	postForEach(0, [&](int nodeId) {
 		if (m_nodes[nodeId].leftCntPar.y)
 			updateNodeBoundsStoh(nodeId);
-		else {
+		else
 			m_nodes[nodeId].bb = AABB::bbUnion(
 				m_nodes[m_nodes[nodeId].leftCntPar.x].bb,
 				m_nodes[m_nodes[nodeId].leftCntPar.x + 1].bb
 			);
-		}
 	});
 
-	//int aba{};
 	postForEach(0, [&](int nodeId) {
 		if (m_nodes[nodeId].leftCntPar.y)
 			subdivideStoh2(nodeId);
@@ -272,24 +264,29 @@ int BVH::findBestLeaf(int primId) {
 	int best{ -1 };
 
 	// brute-force
-	for (int i{}; i < m_nodesUsed; ++i) {
-		if (m_nodes[i].leftCntPar.y) {
-			float currmin = primInsertMetric(primId, i);
-			if (currmin < mincost) {
-				mincost = currmin;
-				best = i;
-			}
-		}
-	}
+	//for (int i{}; i < m_nodesUsed; ++i) {
+	//	if (m_nodes[i].leftCntPar.y) {
+	//		float currmin = primInsertMetric(primId, i);
+	//		if (currmin < mincost) {
+	//			mincost = currmin;
+	//			best = i;
+	//		}
+	//	}
+	//}
 
 	// morton window
-	//const int MORTON_SEARCH_WINDOW{ 10 };
-	//auto frameNearest = m_frm[(*m_frmIts[primId]).z].y;
-	//auto b = std::max(frameNearest - MORTON_SEARCH_WINDOW, 0);
-	//auto e = std::min(m_primsCnt, frameNearest + MORTON_SEARCH_WINDOW);
-	//for (int i{ b }; i < e; ++i) {
-	//	// 
-	//}
+	const int MORTON_SEARCH_WINDOW{ 50 };
+	auto frameNearest = (*m_frmIts[primId]).z;
+	auto b = std::max<int>(frameNearest - MORTON_SEARCH_WINDOW, 0);
+	auto e = std::min<int>(m_frmSize, frameNearest + MORTON_SEARCH_WINDOW);
+	for (int i{ b }; i < e; ++i) {
+		int nodeId{ static_cast<int>(m_frm[i].w) };
+		float currmin = primInsertMetric(primId, nodeId);
+		if (currmin < mincost) {
+			mincost = currmin;
+			best = nodeId;
+		}
+	}
 
 	return best;
 }
