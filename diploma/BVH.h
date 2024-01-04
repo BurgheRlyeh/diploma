@@ -40,9 +40,7 @@ public:
 	// frame edge
 	std::list<XMUINT4>::iterator m_edge{};
 
-
 	int m_frmSize{};
-
 
 	INT m_primsCnt{};
 
@@ -51,12 +49,18 @@ public:
 	INT m_depthMin{ 2 * 1107 - 1 };
 	INT m_depthMax{ -1 };
 
-	INT m_alg{ 3 };
+	// 0 - dichotomy
+	// 1 - sah
+	// 2 - fixed step sah
+	// 3 - binned sah
+	// 4 - stochastic
+	INT m_alg{ 4 };
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 8 };
 
 	float m_frmPart{ 0.1f };
 	float m_uniform{ 0.f };
+
 
 	int m_primsInBVH{};
 
@@ -64,6 +68,7 @@ public:
 	void build();
 
 	void buildStochastic();
+	float costSAH();
 
 private:
 	// stochastic
@@ -92,22 +97,6 @@ private:
 		}
 
 		f(nodeId);
-	}
-
-	void foo(int nodeId, int* offsets, int* id, int* first) {
-		//if (m_nodesUsed <= id) 
-
-		if (m_nodes[nodeId].leftCntPar.y) {
-			m_nodes[nodeId].leftCntPar.x += *first;
-			m_nodes[nodeId].leftCntPar.y += offsets[*id];
-			*first += offsets[*id];
-			offsets[*id] = 0;
-			*id += 1;
-			return;
-		}
-
-		foo(m_nodes[nodeId].leftCntPar.x, offsets, id, first);
-		foo(m_nodes[nodeId].leftCntPar.x + 1, offsets, id, first);
 	}
 
 	void subdivideStoh(INT nodeId);
