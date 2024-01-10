@@ -54,7 +54,7 @@ public:
 	// 2 - fixed step sah
 	// 3 - binned sah
 	// 4 - stochastic
-	INT m_alg{ 4 };
+	INT m_alg{ 3 };
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 8 };
 

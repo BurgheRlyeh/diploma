@@ -262,7 +262,7 @@ void Renderer::update() {
 
 	D3D11_MAPPED_SUBRESOURCE subres;
 
-	// update scene buffer
+	// update scene buffer 
 	{
 		THROW_IF_FAILED(m_pDeviceContext->Map(
 			m_pSceneBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subres
@@ -337,6 +337,8 @@ bool Renderer::render() {
 
 	m_pGeom->rayTracing(m_pSceneBuffer, m_pRTBuffer, m_width, m_height);
 	m_pDeviceContext->OMSetRenderTargets(1, views, nullptr);
+
+	m_pAABBRenderer->render(m_pSampler, m_pSceneBuffer);
 
 	m_pPostProcess->render(m_pBackBufferRTV, m_pSampler);
 
@@ -643,12 +645,13 @@ HRESULT Renderer::initScene() {
 		THROW_IF_FAILED(hr);
 	}
 
-	//hr = m_pCube->initCull();
 	m_pGeom = new Geometry(m_pDevice, m_pDeviceContext);
 	hr = m_pGeom->init(m_pPostProcess->getTexture());
 	THROW_IF_FAILED(hr);
 
-	//m_pCube->rayTracingInit(m_pPostProcess->getTexture());
+	m_pAABBRenderer = new AABBRenderer(m_pDevice, m_pDeviceContext);
+	hr = m_pAABBRenderer->init();
+	THROW_IF_FAILED(hr);
 
 	return hr;
 }

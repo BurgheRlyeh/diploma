@@ -12,14 +12,14 @@ struct AABB {
         std::numeric_limits<float>::max(),
         std::numeric_limits<float>::max(),
         std::numeric_limits<float>::max(),
-        0
+        0.f
     };
 
     DirectX::SimpleMath::Vector4 bmax{
         std::numeric_limits<float>::min(),
         std::numeric_limits<float>::min(),
         std::numeric_limits<float>::min(),
-        0
+        0.f
     };
 
     inline DirectX::SimpleMath::Vector4 getVert(int idx) const {
