@@ -53,7 +53,7 @@ void BVH::buildStochastic() {
 	std::vector<float> cdf(m_primsCnt);
 	float sum{};
 	float wmin{ std::numeric_limits<float>::max() };
-	float wmax{ std::numeric_limits<float>::min() };
+	float wmax{ std::numeric_limits<float>::lowest() };
 
 	auto it = m_primMortonFrmLeaf.begin();
 	for (int i{}; i < m_primsCnt; ++i) {
@@ -221,10 +221,7 @@ int BVH::findBestLeaf(int primId) {
 	// brute-force
 	for (int i{}; i < m_nodesUsed; ++i) {
 		if (m_nodes[i].leftCntPar.y) {
-			float currmin = primInsertMetric(
-				m_frm[primId].x,
-				i
-			);
+			float currmin = primInsertMetric(m_frm[primId].x, i);
 			if (currmin < mincost) {
 				mincost = currmin;
 				best = i;
@@ -343,8 +340,8 @@ void BVH::subdivideStoh2(INT nodeId) {
 	cost = splitBinnedSAHStoh(node, axis, splitPos, lCnt, rCnt);
 
 	if (m_alg != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
-		//++m_leafsCnt;
-		//updateDepths(nodeId);
+		++m_leafsCnt;
+		updateDepths(nodeId);
 		return;
 	}
 

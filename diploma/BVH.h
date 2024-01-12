@@ -29,16 +29,12 @@ public:
 		XMINT4 leftCntPar{};
 	};
 	std::vector<BVHNode> m_nodes{};
-	// old, for shader 
-	std::vector<XMUINT4> m_bvhPrims{};
-	// new, for calc
-	std::list<XMUINT4> m_primMortonFrmLeaf{}; 
-	// for O(1) frame access
-	std::vector<std::list<XMUINT4>::iterator> m_frmIts{};
-	// frame copy with add info
-	std::vector<XMUINT4> m_frm{};
-	// frame edge
-	std::list<XMUINT4>::iterator m_edge{};
+	
+	std::vector<XMUINT4> m_bvhPrims{};	// old, for shader 
+	std::list<XMUINT4> m_primMortonFrmLeaf{};	// new, for calc
+	std::vector<std::list<XMUINT4>::iterator> m_frmIts{};	// for O(1) frame access
+	std::vector<XMUINT4> m_frm{};	// frame copy with add info
+	std::list<XMUINT4>::iterator m_edge{};	// frame edge
 
 	int m_frmSize{};
 
@@ -53,7 +49,7 @@ public:
 	// 1 - sah
 	// 2 - fixed step sah
 	// 3 - binned sah
-	// 4 - stochastic
+	// 4  - stochastic
 	INT m_alg{ 3 };
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 8 };
@@ -70,14 +66,11 @@ public:
 	void buildStochastic();
 	float costSAH();
 
-private:
-	// stochastic
-	void mortonSort();
-	UINT mortonShift(UINT x);
-	UINT encodeMorton(const Vector4& v);
-
-	float primInsertMetric(int primId, int nodeId);
-	int findBestLeaf(int primId);
+	int depth(int id) {
+		int d{};
+		for (; id != 0; id = m_nodes[id].leftCntPar.z) ++d;
+		return d;
+	}
 
 	template <typename T>
 	void preForEach(int nodeId, T f) {
@@ -98,6 +91,15 @@ private:
 
 		f(nodeId);
 	}
+
+private:
+	// stochastic
+	void mortonSort();
+	UINT mortonShift(UINT x);
+	UINT encodeMorton(const Vector4& v);
+
+	float primInsertMetric(int primId, int nodeId);
+	int findBestLeaf(int primId);
 
 	void subdivideStoh(INT nodeId);
 	void subdivideStoh2(INT nodeId);

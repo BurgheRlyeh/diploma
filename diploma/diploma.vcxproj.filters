@@ -60,7 +60,7 @@
     <ClInclude Include="BVH.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="AABBRenderer.h">
+    <ClInclude Include="BVHRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -116,10 +116,10 @@
     <FxCompile Include="RayTracingCS.hlsl">
       <Filter>Shader Files</Filter>
     </FxCompile>
-    <FxCompile Include="AABBVS.hlsl">
+    <FxCompile Include="BVHVS.hlsl">
       <Filter>Shader Files</Filter>
     </FxCompile>
-    <FxCompile Include="AABBPS.hlsl">
+    <FxCompile Include="BVHPS.hlsl">
       <Filter>Shader Files</Filter>
     </FxCompile>
   </ItemGroup>

@@ -9,6 +9,7 @@
 #include "AABB.h"
 #include "Timer.h"
 #include "BVH.h"
+#include "BVHRenderer.h"
 
 class Renderer;
 class Camera;
@@ -16,6 +17,7 @@ struct AABB;
 class CPUTimer;
 class GPUTimer;
 class BVH;
+class BVHRenderer;
 
 #define LIMIT_V 1013
 #define LIMIT_I 1107
@@ -54,8 +56,10 @@ class Geometry {
 
 	ID3D11UnorderedAccessView* m_pUAVTexture{};
 
+	BVHRenderer* m_pBVHRenderer{};
+
 public:
-	BVH bvh{};
+	BVH m_bvh{};
 
 	Geometry() = delete;
 	Geometry(ID3D11Device* device, ID3D11DeviceContext* deviceContext) :
@@ -73,4 +77,6 @@ public:
 
 	void resizeUAV(ID3D11Texture2D* texture);
 	void rayTracing(ID3D11Buffer* m_pSceneBuffer, ID3D11Buffer* m_pRTBuffer, int width, int height);
+
+	void renderBVH(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer);
 };

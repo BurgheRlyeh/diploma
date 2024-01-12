@@ -13,11 +13,11 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 void Geometry::ModelBuffer::updateMatrices() {
-	//mModel =
-	//	Matrix::CreateScale(3.f) * 
-	//	Matrix::CreateRotationX(-XM_PIDIV2) * 
-	//	Matrix::CreateRotationY(posAngle.w) * 
-	//	Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
+	mModel =
+		Matrix::CreateScale(3.f) * 
+		Matrix::CreateRotationX(-XM_PIDIV2) * 
+		Matrix::CreateRotationY(posAngle.w) * 
+		Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
 	mModelInv = mModel.Invert();
 }
 
@@ -161,6 +161,10 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 
 	resizeUAV(tex);
 
+	m_pBVHRenderer = new BVHRenderer(m_pDevice, m_pDeviceContext);
+	hr = m_pBVHRenderer->init();
+	THROW_IF_FAILED(hr);
+
 	// timers init
 	m_pGPUTimer = new GPUTimer(m_pDevice, m_pDeviceContext);
 	m_pCPUTimer = new CPUTimer();
@@ -171,6 +175,8 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 }
 
 void Geometry::term() {
+	m_pBVHRenderer->term();
+
 	SAFE_RELEASE(m_pUAVTexture);
 	SAFE_RELEASE(m_pRayTracingCS);
 	SAFE_RELEASE(m_pTriIdsBuffer);
@@ -197,13 +203,30 @@ void Geometry::update(float delta, bool isRotate) {
 void Geometry::updateBVH() {
 	m_pCPUTimer->start();
 
-	bvh.init(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
-	bvh.build();
+	m_bvh.init(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
+	m_bvh.build();
 
 	m_pCPUTimer->stop();
 
-	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, bvh.m_nodes.data(), 0, 0);
-	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, bvh.m_bvhPrims.data(), 0, 0);
+	m_pBVHRenderer->reset();
+	for (int i{}; i < m_bvh.m_nodesUsed; ++i) {
+		auto bb = m_bvh.m_nodes[i].bb;
+
+		Color cl{ 0.f, 1.f, 0.f, 0.f };
+		int depth = m_bvh.depth(i);
+		float coef = 1.f * depth / m_bvh.m_depthMax;
+		cl.y = 1 - coef;
+		cl.z = coef;
+
+		if (m_bvh.m_nodes[i].leftCntPar.y)
+			cl.x = 1.f;
+
+		m_pBVHRenderer->add(bb, cl);
+	}
+	m_pBVHRenderer->update();
+
+	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, m_bvh.m_nodes.data(), 0, 0);
+	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, m_bvh.m_bvhPrims.data(), 0, 0);
 }
 
 void Geometry::resizeUAV(ID3D11Texture2D* tex) {
@@ -248,4 +271,8 @@ void Geometry::rayTracing(ID3D11Buffer* m_pSBuf, ID3D11Buffer* m_pRTBuf, int w, 
 	// unbind uav
 	ID3D11UnorderedAccessView* nullUav{};
 	m_pDeviceContext->CSSetUnorderedAccessViews(0, 1, &nullUav, nullptr);
+}
+
+void Geometry::renderBVH(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer) {
+	m_pBVHRenderer->render(pSampler, pSceneBuffer);
 }

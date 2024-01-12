@@ -16,9 +16,9 @@ struct AABB {
     };
 
     DirectX::SimpleMath::Vector4 bmax{
-        std::numeric_limits<float>::min(),
-        std::numeric_limits<float>::min(),
-        std::numeric_limits<float>::min(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
         0.f
     };
 

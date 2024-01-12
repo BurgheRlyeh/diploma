@@ -4,11 +4,14 @@
 
 #include "AABB.h"
 
+#define LIMIT_V 1013
+#define LIMIT_I 1107
+
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
-class AABBRenderer {
-	static const int MaxInst{ 2 * 1107 - 1 };
+class BVHRenderer {
+	static const int MaxInst{ 2 * LIMIT_I - 1 };
 
 	struct ModelBuffer {
 		AABB bb{ {}, { 1.f, 1.f, 1.f, 0.f } };
@@ -21,8 +24,9 @@ class AABBRenderer {
 	ID3D11Buffer* m_pVertexBuffer{};
 	ID3D11Buffer* m_pIndexBuffer{};
 
-	ID3D11Buffer* m_pModelBuffer{};
 	std::vector<ModelBuffer> m_modelBuffers{};
+	ID3D11Buffer* m_pModelBuffer{};
+	ID3D11ShaderResourceView* m_pModelBufferSRV{};
 
 	ID3D11VertexShader* m_pVertexShader{};
 	ID3D11PixelShader* m_pPixelShader{};
@@ -31,8 +35,8 @@ class AABBRenderer {
 	bool isUpd{ true };
 
 public:
-	AABBRenderer() = delete;
-	AABBRenderer(
+	BVHRenderer() = delete;
+	BVHRenderer(
 		ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext
 	) : m_pDevice(pDevice), m_pDeviceContext(pDeviceContext) {};
 
@@ -62,7 +66,7 @@ public:
 			hr = m_pDevice->CreateBuffer(&desc, &data, &m_pVertexBuffer);
 			THROW_IF_FAILED(hr);
 
-			hr = setResourceName(m_pVertexBuffer, "AABBVerterBuffer");
+			hr = setResourceName(m_pVertexBuffer, "BVHVerterBuffer");
 			THROW_IF_FAILED(hr);
 		}
 
@@ -88,14 +92,14 @@ public:
 			hr = m_pDevice->CreateBuffer(&desc, &data, &m_pIndexBuffer);
 			THROW_IF_FAILED(hr);
 
-			hr = setResourceName(m_pIndexBuffer, "AABBIndexBuffer");
+			hr = setResourceName(m_pIndexBuffer, "BVHIndexBuffer");
 			THROW_IF_FAILED(hr);
 		}
 
 		// shader processing
 		ID3DBlob* pBlobVS{};
 		{
-			std::wstring filepath{ L"AABBVS.cso" };
+			std::wstring filepath{ L"BVHVS.cso" };
 			hr = D3DReadFileToBlob(filepath.c_str(), &pBlobVS);
 			THROW_IF_FAILED(hr);
 
@@ -108,7 +112,7 @@ public:
 			THROW_IF_FAILED(hr);
 
 			ID3DBlob* pBlobPS{};
-			filepath = L"AABBPS.cso";
+			filepath = L"BVHPS.cso";
 			hr = D3DReadFileToBlob(filepath.c_str(), &pBlobPS);
 			THROW_IF_FAILED(hr);
 
@@ -136,21 +140,35 @@ public:
 			);
 			THROW_IF_FAILED(hr);
 
-			hr = setResourceName(m_pInputLayout, "AABBInputLayout");
+			hr = setResourceName(m_pInputLayout, "BVHInputLayout");
 			THROW_IF_FAILED(hr);
 		}
 
 		// create model buffer
 		{
 			D3D11_BUFFER_DESC desc{
-				.ByteWidth{ sizeof(ModelBuffer) * 1106 },
+				.ByteWidth{ sizeof(ModelBuffer) * (2 * LIMIT_I - 1) },
 				.Usage{ D3D11_USAGE_DEFAULT },
-				.BindFlags{ D3D11_BIND_CONSTANT_BUFFER }
+				.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
+				.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
+				.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
+				.StructureByteStride{ sizeof(ModelBuffer) }
 			};
 			hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pModelBuffer);
 			THROW_IF_FAILED(hr);
 
-			hr = setResourceName(m_pModelBuffer, "AABBModelBuffer");
+			hr = setResourceName(m_pModelBuffer, "BVHRendererModelBuffer");
+			THROW_IF_FAILED(hr);
+
+			D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
+				.Format{ DXGI_FORMAT_UNKNOWN },
+				.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
+				.Buffer{.NumElements{ 2 * LIMIT_I - 1 } }
+			};
+			hr = m_pDevice->CreateShaderResourceView(m_pModelBuffer, &descSRV, &m_pModelBufferSRV);
+			THROW_IF_FAILED(hr);
+
+			hr = setResourceName(m_pModelBufferSRV, "BVHRendererModelBufferSRV");
 			THROW_IF_FAILED(hr);
 		}
 	}
@@ -181,15 +199,8 @@ public:
 	}
 
 	void update() {
-		if (m_modelBuffers.empty()) {
-			add();
-			add({ { 0.f, 0.f, 0.f, 0.f }, { -1.f, -1.f, -1.f, 0.f } }, { 0.f, 0.f, 1.f, 0.f });
-			add({ { 0.5f, 0.5f, 0.5f, 0.f }, { 1.5f, 1.5f, 1.5f, 0.f } }, { 0.f, 1.f, 0.f, 0.f });
-		}
-
 		if (!isUpd) return;
 
-		m_modelBuffers.resize(1106);
 		m_pDeviceContext->UpdateSubresource(m_pModelBuffer, 0, nullptr, m_modelBuffers.data(), 0, 0);
 	}
 
@@ -206,10 +217,13 @@ public:
 		m_pDeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 		m_pDeviceContext->VSSetShader(m_pVertexShader, nullptr, 0);
 
-		update();
-		ID3D11Buffer* cbuffers[]{ pSceneBuffer, m_pModelBuffer };
-		m_pDeviceContext->VSSetConstantBuffers(0, 2, cbuffers);
-		m_pDeviceContext->PSSetConstantBuffers(0, 2, cbuffers);
+		ID3D11Buffer* cbuffers[]{ pSceneBuffer };
+		m_pDeviceContext->VSSetConstantBuffers(0, 1, cbuffers);
+
+		// bind srv
+		ID3D11ShaderResourceView* srvBuffers[]{ m_pModelBufferSRV };
+		m_pDeviceContext->VSSetShaderResources(0, 1, srvBuffers);
+		m_pDeviceContext->PSSetShaderResources(0, 1, srvBuffers);
 
 		m_pDeviceContext->PSSetShader(m_pPixelShader, nullptr, 0);
 		m_pDeviceContext->DrawIndexedInstanced(24, m_modelBuffers.size(), 0, 0, 0);

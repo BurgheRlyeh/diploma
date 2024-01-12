@@ -8,13 +8,11 @@
 #include "InputHandler.h"
 #include "PostProcess.h"
 #include "Geometry.h"
-#include "AABBRenderer.h"
 
 class Camera;
 class InputHandler;
 class PostProcess;
 class Geometry;
-class AABBRenderer;
 
 class Renderer {
 	const FLOAT m_near{ 0.1f };
@@ -86,7 +84,6 @@ class Renderer {
 
 
 public:
-	AABBRenderer* m_pAABBRenderer{};
 	InputHandler* m_pInputHandler{};
 
 	void switchRotation();
