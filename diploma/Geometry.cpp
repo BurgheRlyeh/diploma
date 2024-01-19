@@ -91,54 +91,6 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 		THROW_IF_FAILED(hr);
 	}
 
-	// bvh structured buffer
-	{
-		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ (2 * idsCnt + 1) * sizeof(BVH::BVHNode) },
-			.Usage{ D3D11_USAGE_DEFAULT },
-			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
-			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
-			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
-			.StructureByteStride{ sizeof(BVH::BVHNode) }
-		};
-
-		hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pBVHBuffer);
-		THROW_IF_FAILED(hr);
-
-		hr = setResourceName(m_pBVHBuffer, "BVHBuffer");
-		THROW_IF_FAILED(hr);
-
-		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
-			.Format{ DXGI_FORMAT_UNKNOWN },
-			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
-			.Buffer{
-				.FirstElement{ 0 },
-				.NumElements{ 2 * idsCnt + 1 }
-			}
-		};
-
-		hr = m_pDevice->CreateShaderResourceView(m_pBVHBuffer, &descSRV, &m_pBVHBufferSRV);
-		THROW_IF_FAILED(hr);
-
-		hr = setResourceName(m_pBVHBufferSRV, "BVHBufferSRV");
-		THROW_IF_FAILED(hr);
-	}
-
-	// create triangle indices buffer
-	{
-		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ idsCnt * sizeof(XMINT4) },
-			.Usage{ D3D11_USAGE_DEFAULT },
-			.BindFlags{ D3D11_BIND_CONSTANT_BUFFER }
-		};
-
-		hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pTriIdsBuffer);
-		THROW_IF_FAILED(hr);
-
-		hr = setResourceName(m_pTriIdsBuffer, "TriIdsBuffer");
-		THROW_IF_FAILED(hr);
-	}
-
 	// shader processing
 	{
 		ID3DBlob* pBlob{};
@@ -161,9 +113,7 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 
 	resizeUAV(tex);
 
-	m_pBVHRenderer = new BVHRenderer(m_pDevice, m_pDeviceContext);
-	hr = m_pBVHRenderer->init();
-	THROW_IF_FAILED(hr);
+	m_pBVH = new BVH(m_pDevice, m_pDeviceContext);
 
 	// timers init
 	m_pGPUTimer = new GPUTimer(m_pDevice, m_pDeviceContext);
@@ -175,13 +125,10 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 }
 
 void Geometry::term() {
-	m_pBVHRenderer->term();
+	m_pBVH->term();
 
 	SAFE_RELEASE(m_pUAVTexture);
 	SAFE_RELEASE(m_pRayTracingCS);
-	SAFE_RELEASE(m_pTriIdsBuffer);
-	SAFE_RELEASE(m_pBVHBufferSRV);
-	SAFE_RELEASE(m_pBVHBuffer);
 	SAFE_RELEASE(m_pModelBuffer);
 	SAFE_RELEASE(m_pIdsConstBuffer);
 	SAFE_RELEASE(m_pVtsConstBuffer);
@@ -203,30 +150,13 @@ void Geometry::update(float delta, bool isRotate) {
 void Geometry::updateBVH() {
 	m_pCPUTimer->start();
 
-	m_bvh.init(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
-	m_bvh.build();
+	m_pBVH->init(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
+	m_pBVH->build();
 
 	m_pCPUTimer->stop();
 
-	m_pBVHRenderer->reset();
-	for (int i{}; i < m_bvh.m_nodesUsed; ++i) {
-		auto bb = m_bvh.m_nodes[i].bb;
-
-		Color cl{ 0.f, 1.f, 0.f, 0.f };
-		int depth = m_bvh.depth(i);
-		float coef = 1.f * depth / m_bvh.m_depthMax;
-		cl.y = 1 - coef;
-		cl.z = coef;
-
-		if (m_bvh.m_nodes[i].leftCntPar.y)
-			cl.x = 1.f;
-
-		m_pBVHRenderer->add(bb, cl);
-	}
-	m_pBVHRenderer->update();
-
-	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, m_bvh.m_nodes.data(), 0, 0);
-	m_pDeviceContext->UpdateSubresource(m_pTriIdsBuffer, 0, nullptr, m_bvh.m_bvhPrims.data(), 0, 0);
+	m_pBVH->updateRenderBVH();
+	m_pBVH->updateBuffers();
 }
 
 void Geometry::resizeUAV(ID3D11Texture2D* tex) {
@@ -245,13 +175,13 @@ void Geometry::rayTracing(ID3D11Buffer* m_pSBuf, ID3D11Buffer* m_pRTBuf, int w, 
 		m_pVtsConstBuffer,
 		m_pIdsConstBuffer,
 		m_pModelBuffer,
-		m_pTriIdsBuffer,
+		m_pBVH->getPrimIdsBuffer(),
 		m_pRTBuf
 	};
 	m_pDeviceContext->CSSetConstantBuffers(0, 5, constBuffers);
 
 	// bind srv
-	ID3D11ShaderResourceView* srvBuffers[]{ m_pBVHBufferSRV };
+	ID3D11ShaderResourceView* srvBuffers[]{ m_pBVH->getBVHBufferSRV()};
 	m_pDeviceContext->CSSetShaderResources(0, 1, srvBuffers);
 
 	// unbind rtv
@@ -274,5 +204,5 @@ void Geometry::rayTracing(ID3D11Buffer* m_pSBuf, ID3D11Buffer* m_pRTBuf, int w, 
 }
 
 void Geometry::renderBVH(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer) {
-	m_pBVHRenderer->render(pSampler, pSceneBuffer);
+	m_pBVH->render(pSampler, pSceneBuffer);
 }

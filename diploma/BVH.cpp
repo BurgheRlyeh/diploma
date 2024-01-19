@@ -31,19 +31,193 @@ void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMa
 	}
 }
 
+void BVH::term() {
+	SAFE_RELEASE(m_pPrimIdsBuffer);
+	SAFE_RELEASE(m_pBVHBufferSRV);
+	SAFE_RELEASE(m_pBVHBuffer);
+	SAFE_RELEASE(m_pModelBuffer);
+	SAFE_RELEASE(m_pVertexShader);
+	SAFE_RELEASE(m_pPixelShader);
+	SAFE_RELEASE(m_pInputLayout);
+	SAFE_RELEASE(m_pIndexBuffer);
+	SAFE_RELEASE(m_pVertexBuffer);
+}
+
+void BVH::render(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer) {
+	ID3D11SamplerState* samplers[]{ pSampler };
+	m_pDeviceContext->PSSetSamplers(0, 1, samplers);
+
+	m_pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	ID3D11Buffer* vertexBuffers[]{ m_pVertexBuffer };
+	UINT strides[]{ 12 }, offsets[]{ 0 };
+	m_pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffers, strides, offsets);
+	m_pDeviceContext->IASetInputLayout(m_pInputLayout);
+	m_pDeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+	m_pDeviceContext->VSSetShader(m_pVertexShader, nullptr, 0);
+
+	ID3D11Buffer* cbuffers[]{ pSceneBuffer };
+	m_pDeviceContext->VSSetConstantBuffers(0, 1, cbuffers);
+
+	// bind srv
+	ID3D11ShaderResourceView* srvBuffers[]{ m_pModelBufferSRV };
+	m_pDeviceContext->VSSetShaderResources(0, 1, srvBuffers);
+	m_pDeviceContext->PSSetShaderResources(0, 1, srvBuffers);
+
+	m_pDeviceContext->PSSetShader(m_pPixelShader, nullptr, 0);
+	m_pDeviceContext->DrawIndexedInstanced(24, m_modelBuffers.size(), 0, 0, 0);
+}
+
 void BVH::build() {
-	if (m_alg == 4) {
+	if (m_alg != 4) {
+		m_nodes[0].leftCntPar = {
+			0, m_primsCnt, -1, 0
+		};
+		updateNodeBounds(0);
+		subdivide(0);
+	}
+	else {
 		buildStochastic();
-		return;
+	}
+}
+
+void BVH::updateBuffers() {
+	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, m_nodes.data(), 0, 0);
+	m_pDeviceContext->UpdateSubresource(m_pPrimIdsBuffer, 0, nullptr, m_bvhPrims.data(), 0, 0);
+}
+
+void BVH::updateRenderBVH() {
+	m_modelBuffers.clear();
+
+	if (m_aabbHighlightAll) {
+		preForEach(0, [&](int nodeId) {
+			float d{ static_cast<float>(depth(nodeId)) };
+
+			AABB bb{ m_nodes[nodeId].bb };
+			Color cl{
+				m_nodes[nodeId].leftCntPar.y ? 1.f : 0.f,
+				1.f - d / m_depthMax,
+				d / m_depthMax,
+				0.f
+			};
+
+			m_modelBuffers.push_back({ bb, cl });
+		});
+	}
+	else if (m_aabbHighlightSubtree) {
+		int depthLim{ depth(m_aabbHighlightNode) };
+
+		preForEach(m_aabbHighlightNode, [&](int nodeId) {
+			float d{ 1.f * depth(nodeId) };
+			if (d - depthLim > m_aabbHighlightSubtreeDepth)
+				return;
+
+			AABB bb{ m_nodes[nodeId].bb };
+			Color cl{
+				m_nodes[nodeId].leftCntPar.y ? 1.f : 0.f,
+				1.f - d / depthLim,
+				d / depthLim,
+				0.f
+			};
+
+			m_modelBuffers.push_back({ bb, cl });
+
+			if (m_aabbHighlightPrims && m_nodes[nodeId].leftCntPar.y) {
+				for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
+					UINT index{ m_bvhPrims[m_nodes[nodeId].leftCntPar.x + i].x };
+					m_bvhPrims[index].y = 1;
+				}
+			}
+		});
+	}
+	else if (m_aabbHighlightOne) {
+		int nodeId{ m_aabbHighlightNode };
+		BVHNode& node{ m_nodes[nodeId] };
+		int parent{};
+		if (nodeId) parent = node.leftCntPar.z;
+		int sibling{ m_nodes[parent].leftCntPar.x };
+		if (nodeId) sibling += (nodeId != m_nodes[parent].leftCntPar.x ? 0 : 1);
+		int child1{ node.leftCntPar.x }, child2{ child1 + 1 };
+
+		// selected
+		float d{ static_cast<float>(depth(nodeId)) };
+		AABB bb{ m_nodes[nodeId].bb };
+		Color cl{
+			m_nodes[nodeId].leftCntPar.y ? 1.f : 0.f,
+			1.f - d / m_depthMax,
+			d / m_depthMax,
+			0.f
+		};
+
+		m_modelBuffers.push_back({ bb, cl });
+
+		if (m_aabbHighlightPrims && m_nodes[nodeId].leftCntPar.y) {
+			for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
+				UINT index{ m_bvhPrims[m_nodes[nodeId].leftCntPar.x + i].x };
+				m_bvhPrims[index].y = 1;
+			}
+		}
+
+		if (m_aabbHighlightParent && nodeId) {
+			d = depth(parent);
+			bb = m_nodes[parent].bb;
+			cl = {
+				m_nodes[parent].leftCntPar.y ? 1.f : 0.f,
+				1.f - d / m_depthMax,
+				d / m_depthMax,
+				0.f
+			};
+
+			m_modelBuffers.push_back({ bb, cl });
+		}
+
+		if (m_aabbHighlightSibling && nodeId) {
+			d = depth(sibling);
+			bb = m_nodes[sibling].bb;
+			cl = {
+				m_nodes[sibling].leftCntPar.y ? 1.f : 0.f,
+				1.f - d / m_depthMax,
+				d / m_depthMax,
+				0.f
+			};
+
+			m_modelBuffers.push_back({ bb, cl });
+
+			if (m_aabbHighlightPrims && m_nodes[sibling].leftCntPar.y) {
+				for (int i{}; i < m_nodes[sibling].leftCntPar.y; ++i) {
+					UINT index{ m_bvhPrims[m_nodes[sibling].leftCntPar.x + i].x };
+					m_bvhPrims[index].y = 1;
+				}
+			}
+		}
+
+		if (m_aabbHighlightChildren && !node.leftCntPar.y) {
+			for (int child{ child1 }; child <= child2; ++child) {
+				d = depth(child);
+				bb = m_nodes[child].bb;
+				cl = {
+					m_nodes[child].leftCntPar.y ? 1.f : 0.f,
+					1.f - d / m_depthMax,
+					d / m_depthMax,
+					0.f
+				};
+
+				m_modelBuffers.push_back({ bb, cl });
+
+				if (m_aabbHighlightPrims && m_nodes[child].leftCntPar.y) {
+					for (int i{}; i < m_nodes[child].leftCntPar.y; ++i) {
+						UINT index{ m_bvhPrims[m_nodes[child].leftCntPar.x + i].x };
+						m_bvhPrims[index].y = 1;
+					}
+				}
+			}
+		}
+	}
+	else {
+		m_modelBuffers.push_back({ {}, {} });
 	}
 
-	m_nodes[0].leftCntPar = {
-		0, m_primsCnt, -1, 0
-	};
-	updateNodeBounds(0);
-	subdivide(0);
-
-	m_nodes[0] = m_nodes[0];
+	m_pDeviceContext->UpdateSubresource(m_pModelBuffer, 0, nullptr, m_modelBuffers.data(), 0, 0);
 }
 
 void BVH::buildStochastic() {
@@ -79,7 +253,6 @@ void BVH::buildStochastic() {
 			BIN_CNT - 1.f
 		))];
 	}
-
 
 	// primitive probability, compensate uniformity
 	float s{ 1.f / (m_primsCnt * m_frmPart) };
@@ -148,10 +321,14 @@ void BVH::buildStochastic() {
 	updateNodeBoundsStoh(0);
 	subdivideStoh(0);
 
+	//for (int i{}; i < frmSize; ++i) {
+	//	m_bvhPrims[(*m_frmIts[i]).x].y = 1.f;
+	//}
+
 	std::vector<int> offsets(2 * m_primsCnt - 1);
 	m_frmSize = frmSize;
 	for (int i{ frmSize }; i < m_primsCnt; ++i) {
-		int leaf{ findBestLeaf((*m_edge).z) };
+		int leaf{ findBestLeaf((*m_edge).x) };
 		++offsets[leaf];
 
 		it = m_frmIts[m_frm[(*m_frmIts[m_nodes[leaf].leftCntPar.x]).z].z + 1];
@@ -186,7 +363,7 @@ void BVH::buildStochastic() {
 
 	it = m_primMortonFrmLeaf.begin();
 	for (int i{}; it != m_primMortonFrmLeaf.end(); ++i, ++it) {
-		m_bvhPrims[i] = *it;
+		m_bvhPrims[i].x = (*it).x;
 	}
 	  
 	m_nodes[0] = m_nodes[0];
@@ -195,17 +372,15 @@ void BVH::buildStochastic() {
 float BVH::primInsertMetric(int primId, int nodeId) {
 	Primitive prim = m_prims[primId];
 	BVHNode node = m_nodes[nodeId];
-	AABB nodeBounds{ node.bb };
 
-	float oldSA{ nodeBounds.area() };
-	float newSA{ AABB::bbUnion(nodeBounds, prim.bb).area() };
+	float oldSA{ node.bb.area() };
+	float newSA{ AABB::bbUnion(node.bb, prim.bb).area() };
 	float cost{ newSA * (node.leftCntPar.y + 1) - oldSA * node.leftCntPar.y };
 
 	while (node.leftCntPar.z != -1) {
-		nodeBounds = node.bb;
 
-		oldSA = nodeBounds.area();
-		newSA = AABB::bbUnion(nodeBounds, prim.bb).area();
+		oldSA = node.bb.area();
+		newSA = AABB::bbUnion(node.bb, prim.bb).area();
 		cost += newSA - oldSA;
 
 		node = m_nodes[node.leftCntPar.z];
@@ -221,7 +396,7 @@ int BVH::findBestLeaf(int primId) {
 	// brute-force
 	for (int i{}; i < m_nodesUsed; ++i) {
 		if (m_nodes[i].leftCntPar.y) {
-			float currmin = primInsertMetric(m_frm[primId].x, i);
+			float currmin = primInsertMetric(primId, i);
 			if (currmin < mincost) {
 				mincost = currmin;
 				best = i;
@@ -450,7 +625,11 @@ void BVH::mortonSort() {
 	}
 
 	// sort primitives
-	m_primMortonFrmLeaf.sort([&](const XMUINT4& p1, const XMUINT4& p2) { return p1.y < p2.y; });
+	m_primMortonFrmLeaf.sort(
+		[&](const XMUINT4& p1, const XMUINT4& p2) {
+			return p1.y < p2.y;
+		}
+	);
 	//std::sort(
 	//	m_lPrimMortonFrmLeaf.begin(),
 	//	m_lPrimMortonFrmLeaf.end(),

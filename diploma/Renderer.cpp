@@ -292,12 +292,12 @@ void Renderer::update() {
 
 		(f / f.w - n / n.w).Normalize(m_rtBuffer.camDir);
 
-		m_rtBuffer.highligths = {
-			static_cast<int>(m_pGeom->m_bvh.m_bvhPrims[m_highlights.x].x),
-			static_cast<int>(m_pGeom->m_bvh.m_bvhPrims[m_highlights.y].x),
-			static_cast<int>(m_pGeom->m_bvh.m_bvhPrims[m_highlights.z].x),
-			-1
-		};
+		//m_rtBuffer.highligths = {
+		//	static_cast<int>(m_pGeom->m_bvh.m_bvhPrims[m_highlights.x].x),
+		//	static_cast<int>(m_pGeom->m_bvh.m_bvhPrims[m_highlights.y].x),
+		//	static_cast<int>(m_pGeom->m_bvh.m_bvhPrims[m_highlights.z].x),
+		//	-1
+		//};
 
 		memcpy(subres.pData, &m_rtBuffer, sizeof(RTBuffer));
 		m_pDeviceContext->Unmap(m_pRTBuffer, 0);
@@ -376,69 +376,72 @@ bool Renderer::render() {
 		ImGui::End();
 	}
 
-	{
-		ImGui::Begin("BVH");
+	m_pGeom->m_pBVH->renderBVHImGui();
+	m_pGeom->m_pBVH->renderAABBsImGui();
 
-		ImGui::Text("Split algorithm:");
+	//{
+	//	ImGui::Begin("BVH");
 
-		bool isDichotomy{ m_pGeom->m_bvh.m_alg == 0 };
-		ImGui::Checkbox("Dichotomy", &isDichotomy);
-		if (isDichotomy) {
-			m_pGeom->m_bvh.m_alg = 0;
-			ImGui::DragInt("Primitives per leaf", &m_pGeom->m_bvh.m_primsPerLeaf, 1, 2, 32);
-		}
+	//	ImGui::Text("Split algorithm:");
 
-		bool isSAH{ m_pGeom->m_bvh.m_alg == 1 };
-		ImGui::Checkbox("SAH", &isSAH);
-		if (isSAH) m_pGeom->m_bvh.m_alg = 1;
+	//	bool isDichotomy{ m_pGeom->m_bvh.m_alg == 0 };
+	//	ImGui::Checkbox("Dichotomy", &isDichotomy);
+	//	if (isDichotomy) {
+	//		m_pGeom->m_bvh.m_alg = 0;
+	//		ImGui::DragInt("Primitives per leaf", &m_pGeom->m_bvh.m_primsPerLeaf, 1, 2, 32);
+	//	}
 
-		bool isFixedStepSAH{ m_pGeom->m_bvh.m_alg == 2 };
-		ImGui::Checkbox("FixedStepSAH", &isFixedStepSAH);
-		if (isFixedStepSAH) {
-			m_pGeom->m_bvh.m_alg = 2;
-			ImGui::DragInt("SAH step", &m_pGeom->m_bvh.m_sahSteps, 1, 2, 32);
-		}
+	//	bool isSAH{ m_pGeom->m_bvh.m_alg == 1 };
+	//	ImGui::Checkbox("SAH", &isSAH);
+	//	if (isSAH) m_pGeom->m_bvh.m_alg = 1;
 
-		bool isBinnedSAH{ m_pGeom->m_bvh.m_alg == 3 };
-		ImGui::Checkbox("BinnedSAH", &isBinnedSAH);
-		if (isBinnedSAH) {
-			m_pGeom->m_bvh.m_alg = 3;
-			ImGui::DragInt("SAH step", &m_pGeom->m_bvh.m_sahSteps, 1, 2, 32);
-		}
+	//	bool isFixedStepSAH{ m_pGeom->m_bvh.m_alg == 2 };
+	//	ImGui::Checkbox("FixedStepSAH", &isFixedStepSAH);
+	//	if (isFixedStepSAH) {
+	//		m_pGeom->m_bvh.m_alg = 2;
+	//		ImGui::DragInt("SAH step", &m_pGeom->m_bvh.m_sahSteps, 1, 2, 32);
+	//	}
 
-		bool isStochastic{ m_pGeom->m_bvh.m_alg == 4 };
-		ImGui::Checkbox("Stochastic", &isStochastic);
-		if (isStochastic) {
-			m_pGeom->m_bvh.m_alg = 4;
+	//	bool isBinnedSAH{ m_pGeom->m_bvh.m_alg == 3 };
+	//	ImGui::Checkbox("BinnedSAH", &isBinnedSAH);
+	//	if (isBinnedSAH) {
+	//		m_pGeom->m_bvh.m_alg = 3;
+	//		ImGui::DragInt("SAH step", &m_pGeom->m_bvh.m_sahSteps, 1, 2, 32);
+	//	}
 
-			float carcassPart{ 100.f * m_pGeom->m_bvh.m_frmPart };
-			ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 1.f, 100.f);
-			m_pGeom->m_bvh.m_frmPart = carcassPart / 100.f;
+	//	bool isStochastic{ m_pGeom->m_bvh.m_alg == 4 };
+	//	ImGui::Checkbox("Stochastic", &isStochastic);
+	//	if (isStochastic) {
+	//		m_pGeom->m_bvh.m_alg = 4;
 
-			float carcassUniform{ 100.f * m_pGeom->m_bvh.m_uniform };
-			ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
-			m_pGeom->m_bvh.m_uniform = carcassUniform / 100.f;
-		}
+	//		float carcassPart{ 100.f * m_pGeom->m_bvh.m_frmPart };
+	//		ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 1.f, 100.f);
+	//		m_pGeom->m_bvh.m_frmPart = carcassPart / 100.f;
 
-		ImGui::Text(" ");
+	//		float carcassUniform{ 100.f * m_pGeom->m_bvh.m_uniform };
+	//		ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
+	//		m_pGeom->m_bvh.m_uniform = carcassUniform / 100.f;
+	//	}
 
-		ImGui::Text("Statistics:");
-		ImGui::Text(" ");
-		ImGui::Text("SAH cost: %.3f", m_pGeom->m_bvh.costSAH());
-		ImGui::Text(" ");
-		ImGui::Text("Last BVH construction time (ms): %.3f", m_geomCPUAvgTime);
-		ImGui::Text(" ");
-		ImGui::Text("Nodes: %d", m_pGeom->m_bvh.m_nodesUsed);
-		ImGui::Text("Leafs: %d", m_pGeom->m_bvh.m_leafsCnt);
-		ImGui::Text(" ");
-		ImGui::Text("Primitives: %d", m_pGeom->m_bvh.m_primsCnt);
-		ImGui::Text("Avg primitives per leaf: %.3f", 1.f * m_pGeom->m_bvh.m_primsCnt / m_pGeom->m_bvh.m_leafsCnt);
-		ImGui::Text(" ");
-		ImGui::Text("Min depth: %d", m_pGeom->m_bvh.m_depthMin);
-		ImGui::Text("Max depth: %d", m_pGeom->m_bvh.m_depthMax);
+	//	ImGui::Text(" ");
 
-		ImGui::End();
-	}
+	//	ImGui::Text("Statistics:");
+	//	ImGui::Text(" ");
+	//	ImGui::Text("SAH cost: %.3f", m_pGeom->m_bvh.costSAH());
+	//	ImGui::Text(" ");
+	//	ImGui::Text("Last BVH construction time (ms): %.3f", m_geomCPUAvgTime);
+	//	ImGui::Text(" ");
+	//	ImGui::Text("Nodes: %d", m_pGeom->m_bvh.m_nodesUsed);
+	//	ImGui::Text("Leafs: %d", m_pGeom->m_bvh.m_leafsCnt);
+	//	ImGui::Text(" ");
+	//	ImGui::Text("Primitives: %d", m_pGeom->m_bvh.m_primsCnt);
+	//	ImGui::Text("Avg primitives per leaf: %.3f", 1.f * m_pGeom->m_bvh.m_primsCnt / m_pGeom->m_bvh.m_leafsCnt);
+	//	ImGui::Text(" ");
+	//	ImGui::Text("Min depth: %d", m_pGeom->m_bvh.m_depthMin);
+	//	ImGui::Text("Max depth: %d", m_pGeom->m_bvh.m_depthMax);
+
+	//	ImGui::End();
+	//}
 
 	{
 		ImGui::Begin("Ray Tracing");
@@ -482,24 +485,24 @@ bool Renderer::render() {
 		ImGui::End();
 	}
 
-	{
-		ImGui::Begin("Mortons");
+	//{
+	//	ImGui::Begin("Mortons");
 
-		XMINT4 highlights{ m_highlights };
+	//	XMINT4 highlights{ m_highlights };
 
-		ImGui::DragInt("Morton primitive id", &highlights.x, 1, 0, m_pGeom->m_bvh.m_primsCnt - 1);
-		ImGui::Text("Buffer primitive id: %i", m_pGeom->m_bvh.m_bvhPrims[highlights.x].x);
-		ImGui::Text(" ");
-		ImGui::DragInt("Morton primitive 2 id", &highlights.y, 1, 0, m_pGeom->m_bvh.m_primsCnt - 1);
-		ImGui::Text("Buffer primitive id: %i", m_pGeom->m_bvh.m_bvhPrims[highlights.y].x);
-		ImGui::Text(" ");
-		ImGui::DragInt("Morton primitive 3 id", &highlights.z, 1, 0, m_pGeom->m_bvh.m_primsCnt - 1);
-		ImGui::Text("Buffer primitive id: %i", m_pGeom->m_bvh.m_bvhPrims[highlights.z].x);
+	//	ImGui::DragInt("Morton primitive id", &highlights.x, 1, 0, m_pGeom->m_bvh.m_primsCnt - 1);
+	//	ImGui::Text("Buffer primitive id: %i", m_pGeom->m_bvh.m_bvhPrims[highlights.x].x);
+	//	ImGui::Text(" ");
+	//	ImGui::DragInt("Morton primitive 2 id", &highlights.y, 1, 0, m_pGeom->m_bvh.m_primsCnt - 1);
+	//	ImGui::Text("Buffer primitive id: %i", m_pGeom->m_bvh.m_bvhPrims[highlights.y].x);
+	//	ImGui::Text(" ");
+	//	ImGui::DragInt("Morton primitive 3 id", &highlights.z, 1, 0, m_pGeom->m_bvh.m_primsCnt - 1);
+	//	ImGui::Text("Buffer primitive id: %i", m_pGeom->m_bvh.m_bvhPrims[highlights.z].x);
 
-		m_highlights = highlights;
+	//	m_highlights = highlights;
 
-		ImGui::End();
-	}
+	//	ImGui::End();
+	//}
 
 	// Rendering
 	ImGui::Render();

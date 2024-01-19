@@ -335,18 +335,18 @@ void main(uint3 DTid: SV_DispatchThreadID) {
         color.x += (1.f - color.x) / 0.5f;
     }
     
-    if (best.tId == highlights.x) {
-        color.x += (1.f - color.x) / 4.f;
-        color.yz -= (float2(1.f, 1.f) - color.yz) / 2.f;
-    }
-    if (best.tId == highlights.y) {
-        color.y += (1.f - color.y) / 4.f;
-        color.xz -= (float2(1.f, 1.f) - color.xz) / 2.f;
-    }
-    if (best.tId == highlights.z) {
-        color.z += (1.f - color.z) / 4.f;
-        color.xy -= (float2(1.f, 1.f) - color.xy) / 2.f;
-    }
+    //if (best.tId == highlights.x) {
+    //    color.x += (1.f - color.x) / 4.f;
+    //    color.yz -= (float2(1.f, 1.f) - color.yz) / 2.f;
+    //}
+    //if (best.tId == highlights.y) {
+    //    color.y += (1.f - color.y) / 4.f;
+    //    color.xz -= (float2(1.f, 1.f) - color.xz) / 2.f;
+    //}
+    //if (best.tId == highlights.z) {
+    //    color.z += (1.f - color.z) / 4.f;
+    //    color.xy -= (float2(1.f, 1.f) - color.xy) / 2.f;
+    //}
     
     texOutput[DTid.xy] = color;
 }
