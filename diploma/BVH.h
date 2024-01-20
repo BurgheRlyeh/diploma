@@ -59,11 +59,12 @@ class BVH {
 	};
 	std::vector<BVHNode> m_nodes{};
 
-	std::vector<XMUINT4> m_bvhPrims{};	// old, for shader 
-	std::list<XMUINT4> m_primMortonFrmLeaf{};	// new, for calc
-	std::vector<std::list<XMUINT4>::iterator> m_frmIts{};	// for O(1) frame access
-	std::vector<XMUINT4> m_frm{};	// frame copy with add info
-	std::list<XMUINT4>::iterator m_edge{};	// frame edge
+	std::vector<XMUINT4> m_primMortonFrmLeaf{};	// new, for calc
+	std::vector<XMUINT4>::iterator m_edge{};
+
+	//std::vector<XMUINT4> m_primNextFrmOrig{};
+	
+	std::vector<XMUINT4> m_frame{};
 
 	INT m_primsCnt{};
 
@@ -77,7 +78,7 @@ class BVH {
 	// 2 - fixed step sah
 	// 3 - binned sah
 	// 4  - stochastic
-	INT m_alg{ 3 };
+	INT m_alg{ 4 };
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 8 };
 
