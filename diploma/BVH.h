@@ -603,6 +603,7 @@ private:
 	}
 
 	void subdivideStoh(INT nodeId);
+	void subdivideStohQueue(INT rootId);
 	void subdivideStoh2(INT nodeId);
 	void updateNodeBoundsStoh(INT nodeIdx);
 	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
