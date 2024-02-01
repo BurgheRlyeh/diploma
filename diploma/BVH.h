@@ -59,12 +59,9 @@ class BVH {
 	};
 	std::vector<BVHNode> m_nodes{};
 
-	std::vector<XMUINT4> m_primMortonFrmLeaf{};	// new, for calc
-	std::vector<XMUINT4>::iterator m_edge{};
-
-	//std::vector<XMUINT4> m_primNextFrmOrig{};
-	
+	std::vector<XMUINT4> m_primMortonFrmLeaf{};
 	std::vector<XMUINT4> m_frame{};
+	std::vector<XMUINT4>::iterator m_edge{};
 
 	INT m_primsCnt{};
 
@@ -78,15 +75,22 @@ class BVH {
 	// 2 - fixed step sah
 	// 3 - binned sah
 	// 4  - stochastic
-	INT m_alg{ 4 };
+	INT m_algBuild{ 4 };
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 8 };
+	// 0 - bruteforce
+	// 1 - morton
+	// 2 - bvh prims
+	// 3 - bvh prims +
+	// 4 - bvh tree
+	// 5 - bvh nodes
+	int m_algInsert{ 0 };
 
 	float m_frmPart{ 0.1f };
 	float m_uniform{ 0.f };
+	int m_insertSearchWindow{ 0 };
 
 	int m_frmSize{};
-
 
 	bool m_aabbHighlightAll{};
 	int m_aabbHighlightNode{};
@@ -98,6 +102,9 @@ class BVH {
 	bool m_aabbHighlightChildren{};
 
 	bool m_aabbHighlightPrims{};
+
+	bool m_highlightFramePrims{};
+	int m_highlightPrim{};
 
 public:
 	BVH() = delete;
@@ -307,35 +314,37 @@ public:
 
 		ImGui::Text("Split algorithm:");
 
-		bool isDichotomy{ m_alg == 0 };
+		bool isDichotomy{ m_algBuild == 0 };
 		ImGui::Checkbox("Dichotomy", &isDichotomy);
 		if (isDichotomy) {
-			m_alg = 0;
+			m_algBuild = 0;
 			ImGui::DragInt("Primitives per leaf", &m_primsPerLeaf, 1, 2, 32);
 		}
 
-		bool isSAH{ m_alg == 1 };
+		bool isSAH{ m_algBuild == 1 };
 		ImGui::Checkbox("SAH", &isSAH);
-		if (isSAH) m_alg = 1;
+		if (isSAH) m_algBuild = 1;
 
-		bool isFixedStepSAH{ m_alg == 2 };
+		bool isFixedStepSAH{ m_algBuild == 2 };
 		ImGui::Checkbox("FixedStepSAH", &isFixedStepSAH);
 		if (isFixedStepSAH) {
-			m_alg = 2;
+			m_algBuild = 2;
 			ImGui::DragInt("SAH step", &m_sahSteps, 1, 2, 32);
 		}
 
-		bool isBinnedSAH{ m_alg == 3 };
+		bool isBinnedSAH{ m_algBuild == 3 };
 		ImGui::Checkbox("BinnedSAH", &isBinnedSAH);
 		if (isBinnedSAH) {
-			m_alg = 3;
+			m_algBuild = 3;
 			ImGui::DragInt("SAH step", &m_sahSteps, 1, 2, 32);
 		}
 
-		bool isStochastic{ m_alg == 4 };
+		bool isStochastic{ m_algBuild == 4 };
 		ImGui::Checkbox("Stochastic", &isStochastic);
 		if (isStochastic) {
-			m_alg = 4;
+			m_algBuild = 4;
+
+			ImGui::DragInt("SAH step", &m_sahSteps, 1, 2, 32);
 
 			float carcassPart{ 100.f * m_frmPart };
 			ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 1.f, 100.f);
@@ -344,6 +353,40 @@ public:
 			float carcassUniform{ 100.f * m_uniform };
 			ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
 			m_uniform = carcassUniform / 100.f;
+
+			ImGui::Text("Insertion prims algorithm:");
+
+			bool isInsertBruteforce{ m_algInsert == 0 };
+			ImGui::Checkbox("Bruteforce", &isInsertBruteforce);
+			if (isInsertBruteforce) m_algInsert = 0;
+
+			bool isInsertMorton{ m_algInsert == 1 };
+			ImGui::Checkbox("Morton", &isInsertMorton);
+			if (isInsertMorton) m_algInsert = 1;
+
+			bool isInsertBVHPrims{ m_algInsert == 2 };
+			ImGui::Checkbox("BVH prims", &isInsertBVHPrims);
+			if (isInsertBVHPrims) m_algInsert = 2;
+
+			bool isInsertBVHPrimsPlus{ m_algInsert == 3 };
+			ImGui::Checkbox("BVH prims+", &isInsertBVHPrimsPlus);
+			if (isInsertBVHPrimsPlus) m_algInsert = 3;
+
+			bool isInsertBVHTree{ m_algInsert == 4 };
+			ImGui::Checkbox("BVH tree", &isInsertBVHTree);
+			if (isInsertBVHTree) m_algInsert = 4;
+
+			bool isInsertBVHNodes{ m_algInsert == 5 };
+			ImGui::Checkbox("BVH nodes", &isInsertBVHNodes);
+			if (isInsertBVHNodes) m_algInsert = 5;
+
+			if (m_algInsert) {
+				ImGui::DragInt(
+					"Insert search window",
+					&m_insertSearchWindow, 1, 0,
+					static_cast<int>(std::round(m_primsCnt * m_frmPart))
+				);
+			}
 		}
 
 		ImGui::Text(" ");
@@ -364,6 +407,16 @@ public:
 		ImGui::Text("Max depth: %d", m_depthMax);
 
 		ImGui::End();
+
+		//ImGui::Begin("Highlights");
+
+		//bool highlightFramePrims{ m_highlightFramePrims };
+		//ImGui::Checkbox("Highlight Frame Prims", &highlightFramePrims);
+		//if (highlightFramePrims != m_highlightFramePrims) {
+
+		//}
+
+		//ImGui::End();
 	}
 
 	void renderAABBsImGui() {
@@ -426,11 +479,28 @@ public:
 			ImGui::Text("(%i, %i)", child1, child2);
 			
 			ImGui::Checkbox("Primitives", &m_aabbHighlightPrims);
-
-			ImGui::Text(" ");
+			if (m_nodes[m_aabbHighlightNode].leftCntPar.y) {
+				ImGui::SameLine();
+				ImGui::Text("(");
+				int first{ m_nodes[m_aabbHighlightNode].leftCntPar.x };
+				int cnt{ m_nodes[m_aabbHighlightNode].leftCntPar.y };
+				for (int i{ first }; i < first + cnt; ++i) {
+					ImGui::SameLine();
+					ImGui::Text("%i", m_primMortonFrmLeaf[i].x);
+					if (i + 1 < m_nodes[m_aabbHighlightNode].leftCntPar.y) {
+						ImGui::SameLine();
+						ImGui::Text(", ");
+					}
+				}
+				ImGui::SameLine();
+				ImGui::Text(")");
+			}
 		}
 
 		ImGui::End();
+
+		updateRenderBVH();
+		updateBuffers();
 	}
 
 	ID3D11Buffer* getPrimIdsBuffer() {
@@ -469,7 +539,68 @@ private:
 	UINT encodeMorton(const Vector4& v);
 
 	float primInsertMetric(int primId, int nodeId);
-	int findBestLeaf(int primId);
+
+	int findBestLeafBruteforce(int primId);
+	int findBestLeafMorton(int primId, int frmNearest);
+	int findBestLeafBVHPrims(int primId, int frmNearest);
+	int findBestLeafBVHPrimsPlus(int primId, int frmNearest);
+	int findBestLeafBVHTree(int primId, int frmNearest);
+	int findBestLeafBVHNodes(int primId, int frmNearest);
+
+	// TODO with backtrack memory
+	int leftLeaf(int leaf) {
+		if (!m_nodes[leaf].leftCntPar.y)
+			return -1;
+
+		int node{ m_nodes[leaf].leftCntPar.z }, prev{ leaf };
+
+		// up
+		while (node && prev == m_nodes[node].leftCntPar.x) {
+			prev = node;
+			node = m_nodes[node].leftCntPar.z;
+		}
+
+		// most left check
+		if (!node && prev == m_nodes[node].leftCntPar.x)
+			return -1;
+
+		// to left subtree
+		node = m_nodes[node].leftCntPar.x;
+
+		// down
+		while (!m_nodes[node].leftCntPar.y) {
+			node = m_nodes[node].leftCntPar.x + 1;
+		}
+
+		return node;
+	}
+	int rightLeaf(int leaf) {
+		// check leaf
+		if (!m_nodes[leaf].leftCntPar.y)
+			return -1;
+
+		int node{ m_nodes[leaf].leftCntPar.z }, prev{ leaf };
+
+		// up
+		while (node && prev == m_nodes[node].leftCntPar.x + 1) {
+			prev = node;
+			node = m_nodes[node].leftCntPar.z;
+		}
+
+		// most right check
+		if (!node && prev == m_nodes[node].leftCntPar.x + 1)
+			return -1;
+
+		// to right subtree
+		node = m_nodes[node].leftCntPar.x + 1;
+
+		// down
+		while (!m_nodes[node].leftCntPar.y) {
+			node = m_nodes[node].leftCntPar.x;
+		}
+
+		return node;
+	}
 
 	void subdivideStoh(INT nodeId);
 	void subdivideStoh2(INT nodeId);
