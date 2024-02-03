@@ -3,31 +3,188 @@
 #include <algorithm>
 #include <queue>
 
-void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
-	m_primsCnt = idsCnt;
+// ---------------
+//	GRAPHICS PART
+// ---------------
+BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext) :
+	m_pDevice(pDevice), m_pDeviceContext(pDeviceContext) {
+	HRESULT hr{ S_OK };
 
-	m_nodesUsed = 1;
-	m_leafsCnt = 0;
-	m_depthMin = 2 * m_primsCnt;
-	m_depthMax = -1;
-
-	m_prims.resize(m_primsCnt);
-	m_primMortonFrmLeaf.clear();
-	m_primMortonFrmLeaf.resize(m_primsCnt);
-	m_nodes.resize(2 * m_primsCnt - 1);
-
-	for (UINT i{}; i < m_primsCnt; ++i) {
-		m_prims[i] = {
-			Vector4::Transform(vts[ids[i].x], modelMatrix),
-			Vector4::Transform(vts[ids[i].y], modelMatrix),
-			Vector4::Transform(vts[ids[i].z], modelMatrix)
+	// vertex buffer
+	{
+		Vector3 vertices[8]{
+			{ 0.f, 0.f, 0.f }, { 0.f, 1.f, 0.f },
+			{ 1.f, 0.f, 0.f }, { 1.f, 1.f, 0.f },
+			{ 0.f, 0.f, 1.f }, { 0.f, 1.f, 1.f },
+			{ 1.f, 0.f, 1.f }, { 1.f, 1.f, 1.f }
 		};
-		m_prims[i].ctr = (m_prims[i].v0 + m_prims[i].v1 + m_prims[i].v2) / 3.f;
-		m_prims[i].bb.grow(m_prims[i].v0);
-		m_prims[i].bb.grow(m_prims[i].v1);
-		m_prims[i].bb.grow(m_prims[i].v2);
 
-		m_primMortonFrmLeaf[i] = { i, 0, 0, 0 };
+		D3D11_BUFFER_DESC desc{
+			.ByteWidth{ sizeof(Vector3) * 8 },
+			.Usage{ D3D11_USAGE_IMMUTABLE },
+			.BindFlags{ D3D11_BIND_VERTEX_BUFFER }
+		};
+
+		D3D11_SUBRESOURCE_DATA data{
+			.pSysMem{ vertices },
+			.SysMemPitch{ sizeof(Vector3) * 8 }
+		};
+
+		hr = m_pDevice->CreateBuffer(&desc, &data, &m_pVertexBuffer);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pVertexBuffer, "BVHVerterBuffer");
+		THROW_IF_FAILED(hr);
+	}
+
+	// index buffer
+	{
+		UINT16 indices[24]{
+			0, 1, 0, 2, 1, 3, 2, 3,
+			0, 4, 1, 5, 2, 6, 3, 7,
+			4, 5, 4, 6, 5, 7, 6, 7
+		};
+
+		D3D11_BUFFER_DESC desc{
+			.ByteWidth{ sizeof(UINT16) * 24 },
+			.Usage{ D3D11_USAGE_IMMUTABLE },
+			.BindFlags{ D3D11_BIND_INDEX_BUFFER }
+		};
+
+		D3D11_SUBRESOURCE_DATA data{
+			.pSysMem{ indices },
+			.SysMemPitch{ sizeof(UINT16) * 24 }
+		};
+
+		hr = m_pDevice->CreateBuffer(&desc, &data, &m_pIndexBuffer);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pIndexBuffer, "BVHIndexBuffer");
+		THROW_IF_FAILED(hr);
+	}
+
+	// shader processing
+	ID3DBlob* pBlobVS{};
+	{
+		std::wstring filepath{ L"BVHVS.cso" };
+		hr = D3DReadFileToBlob(filepath.c_str(), &pBlobVS);
+		THROW_IF_FAILED(hr);
+
+		hr = m_pDevice->CreateVertexShader(
+			pBlobVS->GetBufferPointer(),
+			pBlobVS->GetBufferSize(),
+			nullptr,
+			&m_pVertexShader
+		);
+		THROW_IF_FAILED(hr);
+
+		ID3DBlob* pBlobPS{};
+		filepath = L"BVHPS.cso";
+		hr = D3DReadFileToBlob(filepath.c_str(), &pBlobPS);
+		THROW_IF_FAILED(hr);
+
+		hr = m_pDevice->CreatePixelShader(
+			pBlobPS->GetBufferPointer(),
+			pBlobPS->GetBufferSize(),
+			nullptr,
+			&m_pPixelShader
+		);
+		THROW_IF_FAILED(hr);
+	}
+
+	// create input layout
+	{
+		D3D11_INPUT_ELEMENT_DESC inputDesc[]{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+		};
+
+		hr = m_pDevice->CreateInputLayout(
+			inputDesc,
+			1,
+			pBlobVS->GetBufferPointer(),
+			pBlobVS->GetBufferSize(),
+			&m_pInputLayout
+		);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pInputLayout, "BVHInputLayout");
+		THROW_IF_FAILED(hr);
+	}
+
+	// bvh structured buffer
+	{
+		D3D11_BUFFER_DESC desc{
+			.ByteWidth{ (2 * LIMIT_I + 1) * sizeof(BVH::BVHNode) },
+			.Usage{ D3D11_USAGE_DEFAULT },
+			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
+			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
+			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
+			.StructureByteStride{ sizeof(BVH::BVHNode) }
+		};
+
+		hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pBVHBuffer);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pBVHBuffer, "BVHBuffer");
+		THROW_IF_FAILED(hr);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
+			.Format{ DXGI_FORMAT_UNKNOWN },
+			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
+			.Buffer{
+				.FirstElement{ 0 },
+				.NumElements{ 2 * LIMIT_I + 1 }
+			}
+		};
+
+		hr = m_pDevice->CreateShaderResourceView(m_pBVHBuffer, &descSRV, &m_pBVHBufferSRV);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pBVHBufferSRV, "BVHBufferSRV");
+		THROW_IF_FAILED(hr);
+	}
+
+	// create prim indices buffer
+	{
+		D3D11_BUFFER_DESC desc{
+			.ByteWidth{ LIMIT_I * sizeof(XMINT4) },
+			.Usage{ D3D11_USAGE_DEFAULT },
+			.BindFlags{ D3D11_BIND_CONSTANT_BUFFER }
+		};
+
+		hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pPrimIdsBuffer);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pPrimIdsBuffer, "TriIdsBuffer");
+		THROW_IF_FAILED(hr);
+	}
+
+	// create model buffer
+	{
+		D3D11_BUFFER_DESC desc{
+			.ByteWidth{ sizeof(ModelBuffer) * (2 * LIMIT_I - 1) },
+			.Usage{ D3D11_USAGE_DEFAULT },
+			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
+			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
+			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
+			.StructureByteStride{ sizeof(ModelBuffer) }
+		};
+		hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pModelBuffer);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pModelBuffer, "BVHRendererModelBuffer");
+		THROW_IF_FAILED(hr);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
+			.Format{ DXGI_FORMAT_UNKNOWN },
+			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
+			.Buffer{.NumElements{ 2 * LIMIT_I - 1 } }
+		};
+		hr = m_pDevice->CreateShaderResourceView(m_pModelBuffer, &descSRV, &m_pModelBufferSRV);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pModelBufferSRV, "BVHRendererModelBufferSRV");
+		THROW_IF_FAILED(hr);
 	}
 }
 
@@ -41,49 +198,6 @@ void BVH::term() {
 	SAFE_RELEASE(m_pInputLayout);
 	SAFE_RELEASE(m_pIndexBuffer);
 	SAFE_RELEASE(m_pVertexBuffer);
-}
-
-void BVH::render(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer) {
-	ID3D11SamplerState* samplers[]{ pSampler };
-	m_pDeviceContext->PSSetSamplers(0, 1, samplers);
-
-	m_pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
-
-	ID3D11Buffer* vertexBuffers[]{ m_pVertexBuffer };
-	UINT strides[]{ 12 }, offsets[]{ 0 };
-	m_pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffers, strides, offsets);
-	m_pDeviceContext->IASetInputLayout(m_pInputLayout);
-	m_pDeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-	m_pDeviceContext->VSSetShader(m_pVertexShader, nullptr, 0);
-
-	ID3D11Buffer* cbuffers[]{ pSceneBuffer };
-	m_pDeviceContext->VSSetConstantBuffers(0, 1, cbuffers);
-
-	// bind srv
-	ID3D11ShaderResourceView* srvBuffers[]{ m_pModelBufferSRV };
-	m_pDeviceContext->VSSetShaderResources(0, 1, srvBuffers);
-	m_pDeviceContext->PSSetShaderResources(0, 1, srvBuffers);
-
-	m_pDeviceContext->PSSetShader(m_pPixelShader, nullptr, 0);
-	m_pDeviceContext->DrawIndexedInstanced(24, m_modelBuffers.size(), 0, 0, 0);
-}
-
-void BVH::build() {
-	if (m_algBuild != 4) {
-		m_nodes[0].leftCntPar = {
-			0, m_primsCnt, -1, 0
-		};
-		updateNodeBounds(0);
-		subdivide(0);
-	}
-	else {
-		buildStochastic();
-	}
-}
-
-void BVH::updateBuffers() {
-	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, m_nodes.data(), 0, 0);
-	m_pDeviceContext->UpdateSubresource(m_pPrimIdsBuffer, 0, nullptr, m_primMortonFrmLeaf.data(), 0, 0);
 }
 
 void BVH::updateRenderBVH() {
@@ -106,7 +220,7 @@ void BVH::updateRenderBVH() {
 			};
 
 			m_modelBuffers.push_back({ bb, cl });
-		});
+			});
 	}
 	else if (m_aabbHighlightSubtree) {
 		int depthLim{ depth(m_aabbHighlightNode) };
@@ -132,7 +246,7 @@ void BVH::updateRenderBVH() {
 					m_primMortonFrmLeaf[index].y = 1;
 				}
 			}
-		});
+			});
 	}
 	else if (m_aabbHighlightOne) {
 		int nodeId{ m_aabbHighlightNode };
@@ -224,7 +338,278 @@ void BVH::updateRenderBVH() {
 	m_pDeviceContext->UpdateSubresource(m_pModelBuffer, 0, nullptr, m_modelBuffers.data(), 0, 0);
 }
 
-void BVH::buildStochastic() {
+void BVH::updateBuffers() {
+	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, m_nodes.data(), 0, 0);
+	m_pDeviceContext->UpdateSubresource(m_pPrimIdsBuffer, 0, nullptr, m_primMortonFrmLeaf.data(), 0, 0);
+}
+
+void BVH::renderBVHImGui() {
+	ImGui::Begin("BVH");
+
+	ImGui::Text("Split algorithm:");
+
+	bool isDichotomy{ m_algBuild == 0 };
+	ImGui::Checkbox("Dichotomy", &isDichotomy);
+	if (isDichotomy) {
+		m_algBuild = 0;
+		ImGui::DragInt("Primitives per leaf", &m_primsPerLeaf, 1, 2, 32);
+	}
+
+	bool isSAH{ m_algBuild == 1 };
+	ImGui::Checkbox("SAH", &isSAH);
+	if (isSAH) m_algBuild = 1;
+
+	bool isFixedStepSAH{ m_algBuild == 2 };
+	ImGui::Checkbox("FixedStepSAH", &isFixedStepSAH);
+	if (isFixedStepSAH) {
+		m_algBuild = 2;
+		ImGui::DragInt("SAH step", &m_sahSteps, 1, 2, 32);
+	}
+
+	bool isBinnedSAH{ m_algBuild == 3 };
+	ImGui::Checkbox("BinnedSAH", &isBinnedSAH);
+	if (isBinnedSAH) {
+		m_algBuild = 3;
+		ImGui::DragInt("SAH step", &m_sahSteps, 1, 2, 32);
+	}
+
+	bool isStochastic{ m_algBuild == 4 };
+	ImGui::Checkbox("Stochastic", &isStochastic);
+	if (isStochastic) {
+		m_algBuild = 4;
+
+		ImGui::DragInt("SAH step", &m_sahSteps, 1, 2, 32);
+
+		float carcassPart{ 100.f * m_frmPart };
+		ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 1.f, 100.f);
+		m_frmPart = carcassPart / 100.f;
+
+		float carcassUniform{ 100.f * m_uniform };
+		ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
+		m_uniform = carcassUniform / 100.f;
+
+		ImGui::Text("Insertion prims algorithm:");
+
+		bool isInsertBruteforce{ m_algInsert == 0 };
+		ImGui::Checkbox("Bruteforce", &isInsertBruteforce);
+		if (isInsertBruteforce) m_algInsert = 0;
+
+		bool isInsertMorton{ m_algInsert == 1 };
+		ImGui::Checkbox("Morton", &isInsertMorton);
+		if (isInsertMorton) m_algInsert = 1;
+
+		bool isInsertBVHPrims{ m_algInsert == 2 };
+		ImGui::Checkbox("BVH prims", &isInsertBVHPrims);
+		if (isInsertBVHPrims) m_algInsert = 2;
+
+		bool isInsertBVHPrimsPlus{ m_algInsert == 3 };
+		ImGui::Checkbox("BVH prims+", &isInsertBVHPrimsPlus);
+		if (isInsertBVHPrimsPlus) m_algInsert = 3;
+
+		bool isInsertBVHTree{ m_algInsert == 4 };
+		ImGui::Checkbox("BVH tree", &isInsertBVHTree);
+		if (isInsertBVHTree) m_algInsert = 4;
+
+		bool isInsertBVHNodes{ m_algInsert == 5 };
+		ImGui::Checkbox("BVH nodes", &isInsertBVHNodes);
+		if (isInsertBVHNodes) m_algInsert = 5;
+
+		if (m_algInsert) {
+			ImGui::DragInt(
+				"Insert search window",
+				&m_insertSearchWindow, 1, 0,
+				static_cast<int>(std::round(m_primsCnt * m_frmPart))
+			);
+		}
+	}
+
+	ImGui::Text(" ");
+
+	ImGui::Text("Statistics:");
+	ImGui::Text(" ");
+	ImGui::Text("SAH cost: %.3f", costSAH());
+	//ImGui::Text(" ");
+	//ImGui::Text("Last BVH construction time (ms): %.3f", m_geomCPUAvgTime);
+	ImGui::Text(" ");
+	ImGui::Text("Nodes: %d", m_nodesUsed);
+	ImGui::Text("Leafs: %d", m_leafsCnt);
+	ImGui::Text(" ");
+	ImGui::Text("Primitives: %d", m_primsCnt);
+	ImGui::Text("Avg primitives per leaf: %.3f", 1.f * m_primsCnt / m_leafsCnt);
+	ImGui::Text(" ");
+	ImGui::Text("Min depth: %d", m_depthMin);
+	ImGui::Text("Max depth: %d", m_depthMax);
+
+	ImGui::End();
+
+	//ImGui::Begin("Highlights");
+
+	//bool highlightFramePrims{ m_highlightFramePrims };
+	//ImGui::Checkbox("Highlight Frame Prims", &highlightFramePrims);
+	//if (highlightFramePrims != m_highlightFramePrims) {
+
+	//}
+
+	//ImGui::End();
+}
+
+void BVH::renderAABBsImGui() {
+	ImGui::Begin("BVH's AABBs");
+
+	ImGui::Text("Highlight:");
+
+	ImGui::Checkbox("All", &m_aabbHighlightAll);
+	if (m_aabbHighlightAll) {
+		m_aabbHighlightSubtree = m_aabbHighlightOne = false;
+	}
+
+	ImGui::Checkbox("Subtree", &m_aabbHighlightSubtree);
+	if (m_aabbHighlightSubtree) {
+		m_aabbHighlightAll = m_aabbHighlightOne = false;
+
+		ImGui::Text(" ");
+
+		ImGui::Text("Node:");
+		ImGui::SameLine();
+		ImGui::DragInt("N", &m_aabbHighlightNode, 1, 0, m_nodesUsed);
+
+		ImGui::Text("Depth:");
+		ImGui::SameLine();
+		ImGui::DragInt("D", &m_aabbHighlightSubtreeDepth, 1, 0, m_depthMax);
+
+		ImGui::Checkbox("Primitives", &m_aabbHighlightPrims);
+
+		ImGui::Text(" ");
+	}
+
+	ImGui::Checkbox("One", &m_aabbHighlightOne);
+	if (m_aabbHighlightOne) {
+		m_aabbHighlightAll = m_aabbHighlightSubtree = false;
+
+		int nodeId{ m_aabbHighlightNode };
+		BVHNode& node{ m_nodes[nodeId] };
+		int parent{};
+		if (nodeId) parent = node.leftCntPar.z;
+		int sibling{ m_nodes[parent].leftCntPar.x };
+		if (nodeId) sibling += (nodeId != m_nodes[parent].leftCntPar.x ? 0 : 1);
+		int child1{ node.leftCntPar.x }, child2{ child1 + 1 };
+
+		ImGui::Text(" ");
+
+		ImGui::Text("Node:");
+		ImGui::SameLine();
+		ImGui::DragInt(" ", &m_aabbHighlightNode, 1, 0, m_nodesUsed);
+
+		ImGui::Checkbox("Parent", &m_aabbHighlightParent);
+		ImGui::SameLine();
+		ImGui::Text("(%i)", parent);
+
+		ImGui::Checkbox("Sibling", &m_aabbHighlightSibling);
+		ImGui::SameLine();
+		ImGui::Text("(%i)", sibling);
+
+		ImGui::Checkbox("Children", &m_aabbHighlightChildren);
+		ImGui::SameLine();
+		ImGui::Text("(%i, %i)", child1, child2);
+
+		ImGui::Checkbox("Primitives", &m_aabbHighlightPrims);
+		if (m_nodes[m_aabbHighlightNode].leftCntPar.y) {
+			ImGui::SameLine();
+			ImGui::Text("(");
+			int first{ m_nodes[m_aabbHighlightNode].leftCntPar.x };
+			int cnt{ m_nodes[m_aabbHighlightNode].leftCntPar.y };
+			for (int i{ first }; i < first + cnt; ++i) {
+				ImGui::SameLine();
+				ImGui::Text("%i", m_primMortonFrmLeaf[i].x);
+				if (i + 1 < m_nodes[m_aabbHighlightNode].leftCntPar.y) {
+					ImGui::SameLine();
+					ImGui::Text(", ");
+				}
+			}
+			ImGui::SameLine();
+			ImGui::Text(")");
+		}
+	}
+
+	ImGui::End();
+
+	updateRenderBVH();
+	updateBuffers();
+}
+
+
+// ------------
+//	LOGIC PART
+// ------------
+void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
+	m_primsCnt = idsCnt;
+
+	m_nodesUsed = 1;
+	m_leafsCnt = 0;
+	m_depthMin = 2 * m_primsCnt;
+	m_depthMax = -1;
+
+	m_prims.resize(m_primsCnt);
+	m_primMortonFrmLeaf.clear();
+	m_primMortonFrmLeaf.resize(m_primsCnt);
+	m_nodes.resize(2 * m_primsCnt - 1);
+
+	for (UINT i{}; i < m_primsCnt; ++i) {
+		m_prims[i] = {
+			Vector4::Transform(vts[ids[i].x], modelMatrix),
+			Vector4::Transform(vts[ids[i].y], modelMatrix),
+			Vector4::Transform(vts[ids[i].z], modelMatrix)
+		};
+		m_prims[i].ctr = (m_prims[i].v0 + m_prims[i].v1 + m_prims[i].v2) / 3.f;
+		m_prims[i].bb.grow(m_prims[i].v0);
+		m_prims[i].bb.grow(m_prims[i].v1);
+		m_prims[i].bb.grow(m_prims[i].v2);
+
+		m_primMortonFrmLeaf[i] = { i, 0, 0, 0 };
+	}
+}
+
+void BVH::render(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer) {
+	ID3D11SamplerState* samplers[]{ pSampler };
+	m_pDeviceContext->PSSetSamplers(0, 1, samplers);
+
+	m_pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	ID3D11Buffer* vertexBuffers[]{ m_pVertexBuffer };
+	UINT strides[]{ 12 }, offsets[]{ 0 };
+	m_pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffers, strides, offsets);
+	m_pDeviceContext->IASetInputLayout(m_pInputLayout);
+	m_pDeviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+	m_pDeviceContext->VSSetShader(m_pVertexShader, nullptr, 0);
+
+	ID3D11Buffer* cbuffers[]{ pSceneBuffer };
+	m_pDeviceContext->VSSetConstantBuffers(0, 1, cbuffers);
+
+	// bind srv
+	ID3D11ShaderResourceView* srvBuffers[]{ m_pModelBufferSRV };
+	m_pDeviceContext->VSSetShaderResources(0, 1, srvBuffers);
+	m_pDeviceContext->PSSetShaderResources(0, 1, srvBuffers);
+
+	m_pDeviceContext->PSSetShader(m_pPixelShader, nullptr, 0);
+	m_pDeviceContext->DrawIndexedInstanced(24, m_modelBuffers.size(), 0, 0, 0);
+}
+
+void BVH::build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
+	if (m_algBuild != 4) {
+		init(vts, vtsCnt, ids, idsCnt, modelMatrix);
+		m_nodes[0].leftCntPar = {
+			0, m_primsCnt, -1, 0
+		};
+		updateNodeBounds(0);
+		subdivide(0);
+	}
+	else {
+		buildStochastic(vts, vtsCnt, ids, idsCnt, modelMatrix);
+	}
+}
+
+void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
+	init(vts, vtsCnt, ids, idsCnt, modelMatrix);
 	mortonSort();
 
 	// init weights

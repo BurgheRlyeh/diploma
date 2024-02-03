@@ -150,8 +150,7 @@ void Geometry::update(float delta, bool isRotate) {
 void Geometry::updateBVH() {
 	m_pCPUTimer->start();
 
-	m_pBVH->init(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
-	m_pBVH->build();
+	m_pBVH->build(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
 
 	m_pCPUTimer->stop();
 
