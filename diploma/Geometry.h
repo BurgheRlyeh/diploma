@@ -27,17 +27,18 @@ class Geometry {
 	ID3D11DeviceContext* m_pDeviceContext{};
 
 	// index buffer
-	DirectX::XMINT4* indices{};
-	UINT idsCnt{};
-	ID3D11Buffer* m_pIdsConstBuffer{};
+	std::vector<DirectX::XMINT4> m_indices{};
+	ID3D11Buffer* m_pIndexBuffer{};
+	ID3D11ShaderResourceView* m_pIndexBufferSRV{};
 
 	// vertices
-	DirectX::SimpleMath::Vector4* vertices{};
-	UINT vtsCnt{};
-	ID3D11Buffer* m_pVtsConstBuffer{};
+	std::vector<DirectX::SimpleMath::Vector4> m_vertices{};
+	ID3D11Buffer* m_pVertexBuffer{};
+	ID3D11ShaderResourceView* m_pVertexBufferSRV{};
 
 	// model buffer
 	struct ModelBuffer {
+		DirectX::XMINT4 primsCnt{};
 		DirectX::SimpleMath::Matrix mModel{};
 		DirectX::SimpleMath::Matrix mModelInv{};
 		DirectX::SimpleMath::Vector4 posAngle{};

@@ -49,7 +49,7 @@ struct AABB {
 
     inline float area() const {
         DirectX::SimpleMath::Vector4 e{ diagonal() };
-        return e.x * e.y + e.y * e.z + e.z * e.x;
+        return 2 * (e.x * e.y + e.y * e.z + e.z * e.x);
     }
 
     inline DirectX::SimpleMath::Vector4 relateVecPos(

@@ -14,9 +14,19 @@ T string_view_to(std::string_view sv) {
 	return num;
 }
 
-CSVGeometryLoader CSVGeometryLoader::loadFrom(const std::string& filepath) {
-	CSVGeometryLoader gl{};
+void CSVGeometryLoader::loadFrom(
+	const std::string& filepath,
+	std::vector<DirectX::XMINT4>* pIndices,
+	std::vector<DirectX::SimpleMath::Vector4>* pVertices
+) {
 	std::ifstream file{ filepath };
+
+	pIndices->clear();
+	pIndices->resize(0);
+
+	pVertices->clear();
+	pVertices->resize(0);
+
 
 	XMINT4 triangle{};
 	int tv{};
@@ -50,13 +60,11 @@ CSVGeometryLoader CSVGeometryLoader::loadFrom(const std::string& filepath) {
 			triangle.z = id;
 			triangle.w = 0;
 			tv = 0;
-			gl.indices.push_back(triangle);
+			pIndices->push_back(triangle);
 		}
 
-		if (gl.vertices.size() <= id)
-			gl.vertices.resize(static_cast<size_t>(id + 1));
-		gl.vertices[id] = vertex;
+		if (pVertices->size() <= id)
+			pVertices->resize(static_cast<size_t>(id + 1));
+		pVertices->at(id) = vertex;
 	}
-
-	return gl;
 }

@@ -1,34 +1,25 @@
 #define LIMIT_V 1013
 #define LIMIT_I 1107
-
-//#define LIMIT_V 24
-//#define LIMIT_I 36
-
-cbuffer VtsConstBuffer: register(b0) {
-    float4 vertices[LIMIT_V];
-}
-
-cbuffer IdsConstBuffer: register(b1) {
-    int4 indices[LIMIT_I];
-}
-
-cbuffer ModelBuffer: register(b2) {
+cbuffer ModelBuffer: register(b0) {
+    int4 primsCnt;
     float4x4 mModel;
     float4x4 mModelInv;
     float4 posAngle;
 }
 
-cbuffer TrianglesIDs: register(b3) {
-    uint4 triIdx[LIMIT_I];
-}
-
-cbuffer RTBuffer: register(b4) {
+cbuffer RTBuffer: register(b1) {
     float4 whnf;
     float4x4 vpInv;
     int4 instsAlgLeafsTCheck;
     float4 camDir;
     int4 highlights;
 }
+
+StructuredBuffer<float4> vertices : register(t0);
+
+StructuredBuffer<int4> indices : register(t1);
+
+StructuredBuffer<uint4> triIdx : register(t2);
 
 struct AABB {
     float4 bmin, bmax;
@@ -39,7 +30,7 @@ struct BVHNode {
     int4 leftCntPar;
 };
 
-StructuredBuffer<BVHNode> nodes: register(t0);
+StructuredBuffer<BVHNode> nodes: register(t3);
 
 struct Ray {
     float4 orig;
@@ -125,7 +116,8 @@ Intsec naiveIntersection(Ray ray) {
         mRay.dest = mul(mModelInv, ray.dest);
         mRay.dir = normalize(mRay.dest - mRay.orig);
 
-        for (int i = 0; i < LIMIT_I; ++i) {
+        for (int i = 0; i < primsCnt.x; ++i)
+        {
             float4 v0 = vertices[indices[i].x];
             float4 v1 = vertices[indices[i].y];
             float4 v2 = vertices[indices[i].z];
@@ -165,8 +157,8 @@ Intsec bestBVHLeafIntersection(Ray ray, int nodeId) {
 
     
     for (int i = 0; i < nodes[nodeId].leftCntPar.y; ++i) {
-        int mId = triIdx[nodes[nodeId].leftCntPar.x + i].x / LIMIT_I;
-        int tId = triIdx[nodes[nodeId].leftCntPar.x + i].x % LIMIT_I;
+        int mId = triIdx[nodes[nodeId].leftCntPar.x + i].x / primsCnt.x;
+        int tId = triIdx[nodes[nodeId].leftCntPar.x + i].x % primsCnt.x;
 
         Ray mRay;
         mRay.orig = mul(mModelInv, ray.orig);
@@ -178,6 +170,7 @@ Intsec bestBVHLeafIntersection(Ray ray, int nodeId) {
         float4 v2 = vertices[indices[tId].z];
 
         Intsec curr = rayTriangleIntersection(mRay, v0, v1, v2);
+        curr.t = mul(mModel, curr.t);
 
         if (whnf.z < curr.t && curr.t < best.t) {
             best = curr;

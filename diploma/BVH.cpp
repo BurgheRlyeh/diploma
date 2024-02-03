@@ -6,7 +6,7 @@
 // ---------------
 //	GRAPHICS PART
 // ---------------
-BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext) :
+BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, unsigned int primsCnt) :
 	m_pDevice(pDevice), m_pDeviceContext(pDeviceContext) {
 	HRESULT hr{ S_OK };
 
@@ -114,8 +114,8 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext) :
 	// bvh structured buffer
 	{
 		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ (2 * LIMIT_I + 1) * sizeof(BVH::BVHNode) },
-			.Usage{ D3D11_USAGE_DEFAULT },
+			.ByteWidth{ (2 * primsCnt + 1) * sizeof(BVH::BVHNode) },
+			.Usage{ D3D11_USAGE_DYNAMIC },
 			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
 			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
 			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
@@ -133,7 +133,7 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext) :
 			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
 			.Buffer{
 				.FirstElement{ 0 },
-				.NumElements{ 2 * LIMIT_I + 1 }
+				.NumElements{ 2 * primsCnt + 1 }
 			}
 		};
 
@@ -147,23 +147,41 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext) :
 	// create prim indices buffer
 	{
 		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ LIMIT_I * sizeof(XMINT4) },
-			.Usage{ D3D11_USAGE_DEFAULT },
-			.BindFlags{ D3D11_BIND_CONSTANT_BUFFER }
+			.ByteWidth{ primsCnt * sizeof(XMINT4) },
+			.Usage{ D3D11_USAGE_DYNAMIC },
+			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
+			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
+			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
+			.StructureByteStride{ sizeof(XMINT4) }
 		};
 
 		hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pPrimIdsBuffer);
 		THROW_IF_FAILED(hr);
 
-		hr = setResourceName(m_pPrimIdsBuffer, "TriIdsBuffer");
+		hr = setResourceName(m_pPrimIdsBuffer, "PrimIdsBuffer");
+		THROW_IF_FAILED(hr);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
+			.Format{ DXGI_FORMAT_UNKNOWN },
+			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
+			.Buffer{
+				.FirstElement{ 0 },
+				.NumElements{ primsCnt }
+			}
+		};
+
+		hr = m_pDevice->CreateShaderResourceView(m_pPrimIdsBuffer, &descSRV, &m_pPrimIdsBufferSRV);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pPrimIdsBufferSRV, "PrimIdsBufferSRV");
 		THROW_IF_FAILED(hr);
 	}
 
 	// create model buffer
 	{
 		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ sizeof(ModelBuffer) * (2 * LIMIT_I - 1) },
-			.Usage{ D3D11_USAGE_DEFAULT },
+			.ByteWidth{ sizeof(ModelBuffer) * (2 * primsCnt - 1) },
+			.Usage{ D3D11_USAGE_DYNAMIC },
 			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
 			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
 			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
@@ -178,7 +196,7 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext) :
 		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
 			.Format{ DXGI_FORMAT_UNKNOWN },
 			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
-			.Buffer{.NumElements{ 2 * LIMIT_I - 1 } }
+			.Buffer{.NumElements{ 2 * primsCnt - 1 } }
 		};
 		hr = m_pDevice->CreateShaderResourceView(m_pModelBuffer, &descSRV, &m_pModelBufferSRV);
 		THROW_IF_FAILED(hr);
@@ -189,6 +207,7 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext) :
 }
 
 void BVH::term() {
+	SAFE_RELEASE(m_pPrimIdsBufferSRV);
 	SAFE_RELEASE(m_pPrimIdsBuffer);
 	SAFE_RELEASE(m_pBVHBufferSRV);
 	SAFE_RELEASE(m_pBVHBuffer);
@@ -335,12 +354,24 @@ void BVH::updateRenderBVH() {
 		m_modelBuffers.push_back({ {}, {} });
 	}
 
-	m_pDeviceContext->UpdateSubresource(m_pModelBuffer, 0, nullptr, m_modelBuffers.data(), 0, 0);
+	D3D11_MAPPED_SUBRESOURCE subres{};
+	THROW_IF_FAILED(m_pDeviceContext->Map(m_pModelBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subres));
+	memcpy(subres.pData, m_modelBuffers.data(), m_modelBuffers.size() * sizeof(ModelBuffer));
+	m_pDeviceContext->Unmap(m_pModelBuffer, 0);
+
+	//m_pDeviceContext->UpdateSubresource(m_pModelBuffer, 0, nullptr, m_modelBuffers.data(), 0, 0);
 }
 
 void BVH::updateBuffers() {
-	m_pDeviceContext->UpdateSubresource(m_pBVHBuffer, 0, nullptr, m_nodes.data(), 0, 0);
-	m_pDeviceContext->UpdateSubresource(m_pPrimIdsBuffer, 0, nullptr, m_primMortonFrmLeaf.data(), 0, 0);
+	D3D11_MAPPED_SUBRESOURCE subres{};
+	THROW_IF_FAILED(m_pDeviceContext->Map(m_pBVHBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subres));
+	memcpy(subres.pData, m_nodes.data(), sizeof(BVHNode) * m_nodes.capacity());
+	m_pDeviceContext->Unmap(m_pBVHBuffer, 0);
+
+	subres = {};
+	THROW_IF_FAILED(m_pDeviceContext->Map(m_pPrimIdsBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subres));
+	memcpy(subres.pData, m_primMortonFrmLeaf.data(), sizeof(XMINT4) * m_primsCnt);
+	m_pDeviceContext->Unmap(m_pPrimIdsBuffer, 0);
 }
 
 void BVH::renderBVHImGui() {
@@ -626,8 +657,8 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	}
 
 	// algorithm 1: histogram weight clamping
-	const float BASE{ 1.1f };	// default = sqrtf(2.f)
-	const int OFFSET{ 48 };		// default = 32
+	const float BASE{ sqrtf(2.f) };	// default = sqrtf(2.f)
+	const int OFFSET{ 32 };		// default = 32
 	const int BIN_CNT{ 64 };	// default = 64
 
 	int bin_cnts[BIN_CNT]{};
@@ -653,7 +684,7 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 
 	// unclamped & clamped sums, clamp
 	float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
-	float clamp{ std::numeric_limits<float>::infinity() };
+	float clamp{ std::numeric_limits<float>::max() };
 
 	// selection of clamp
 	for (int i{}; i < BIN_CNT - 1; ++i) {
@@ -667,7 +698,7 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	}
 
 	// reweighting if found
-	if (clamp != std::numeric_limits<float>::infinity()) {
+	if (clamp != std::numeric_limits<float>::max()) {
 		sum = 0.f;
 		for (int i{}; i < m_primsCnt; ++i)
 			sum += cdf[i] = std::min(cdf[i], clamp);
@@ -1143,7 +1174,8 @@ float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& le
 		if (bmin == bmax)
 			continue;
 
-		AABB bounds[MaxSteps]{};
+		//AABB bounds[MaxSteps]{};
+		std::vector<AABB> bounds(MaxSteps);
 		int m_primsCnt[MaxSteps]{};
 
 		float step = m_sahSteps / (bmax - bmin);
@@ -1156,6 +1188,7 @@ float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& le
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) * step)
 			) };
+			id = std::max<int>(0, id);
 			++m_primsCnt[id];
 			bounds[id].grow(t.v0);
 			bounds[id].grow(t.v1);
@@ -1366,6 +1399,7 @@ float BVH::splitBinnedSAH(BVHNode& node, int& axis, float& splitPos) {
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) * step)
 			) };
+			id = std::max<int>(0, id);
 			++m_primsCnt[id];
 			bounds[id].grow(t.v0);
 			bounds[id].grow(t.v1);
@@ -1473,18 +1507,30 @@ void BVH::subdivide(INT nodeId) {
 	subdivide(rightIdx);
 }
 
-float BVH::costSAH() {
-	BVHNode& root = m_nodes[0];
-	float sum{};
+float BVH::costSAH(int nodeId) {
+	BVHNode& node{ m_nodes[nodeId] };
 
-	preForEach(root.leftCntPar.x, [&](int nodeId) {
-		BVHNode& node = m_nodes[nodeId];
-		sum += node.bb.area() * std::max(1, node.leftCntPar.y);
-		});
-	preForEach(root.leftCntPar.x + 1, [&](int id) {
-		BVHNode& n = m_nodes[id];
-		sum += n.bb.area() * std::max(1, n.leftCntPar.y);
-		});
+	if (node.leftCntPar.y)
+		return node.leftCntPar.y;
 
-	return sum / root.bb.area();
+	int l{ node.leftCntPar.x }, r{ l + 1 };
+
+	return 1.f + (
+		m_nodes[l].bb.area() * costSAH(l) +
+		m_nodes[r].bb.area() * costSAH(r)
+		) / node.bb.area();
+
+	//BVHNode& root = m_nodes[0];
+	//float sum{};
+
+	//preForEach(root.leftCntPar.x, [&](int nodeId) {
+	//	BVHNode& node = m_nodes[nodeId];
+	//	sum += node.bb.area() * std::max(1, node.leftCntPar.y);
+	//	});
+	//preForEach(root.leftCntPar.x + 1, [&](int id) {
+	//	BVHNode& n = m_nodes[id];
+	//	sum += n.bb.area() * std::max(1, n.leftCntPar.y);
+	//	});
+
+	//return sum / root.bb.area();
 }

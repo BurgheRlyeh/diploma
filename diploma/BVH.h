@@ -41,6 +41,7 @@ class BVH {
 	ID3D11ShaderResourceView* m_pBVHBufferSRV{};
 
 	ID3D11Buffer* m_pPrimIdsBuffer{};
+	ID3D11ShaderResourceView* m_pPrimIdsBufferSRV{};
 
 	ID3D11VertexShader* m_pVertexShader{};
 	ID3D11PixelShader* m_pPixelShader{};
@@ -62,12 +63,12 @@ class BVH {
 
 public:
 	BVH() = delete;
-	BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext);
+	BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, unsigned int primsCnt);
 
 	void term();
 
-	ID3D11Buffer* getPrimIdsBuffer() {
-		return m_pPrimIdsBuffer;
+	ID3D11ShaderResourceView* getPrimIdsBufferSRV() {
+		return m_pPrimIdsBufferSRV;
 	}
 
 	ID3D11ShaderResourceView* getBVHBufferSRV() {
@@ -115,18 +116,18 @@ private:
 	// 4  - stochastic
 	INT m_algBuild{ 4 };
 	INT m_primsPerLeaf{ 2 };
-	INT m_sahSteps{ 8 };
+	INT m_sahSteps{ 32 };
 	// 0 - bruteforce
 	// 1 - morton
 	// 2 - bvh prims
 	// 3 - bvh prims +
 	// 4 - bvh tree
 	// 5 - bvh nodes
-	int m_algInsert{ 0 };
+	int m_algInsert{ 1 };
 
 	float m_frmPart{ 0.1f };
 	float m_uniform{ 0.f };
-	int m_insertSearchWindow{ 0 };
+	int m_insertSearchWindow{ 10 };
 
 	int m_frmSize{};
 
@@ -135,7 +136,7 @@ public:
 
 	void build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 
-	float costSAH();
+	float costSAH(int nodeId = 0);
 
 	int depth(int id) {
 		int d{};

@@ -13,11 +13,10 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 void Geometry::ModelBuffer::updateMatrices() {
-	mModel =
-		Matrix::CreateScale(3.f) * 
-		Matrix::CreateRotationX(-XM_PIDIV2) * 
-		Matrix::CreateRotationY(posAngle.w) * 
-		Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
+	mModel = Matrix::CreateScale(0.001f);
+		//Matrix::CreateRotationX(-XM_PIDIV2) * 
+		//Matrix::CreateRotationY(posAngle.w) * 
+		//Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
 	mModelInv = mModel.Invert();
 }
 
@@ -26,54 +25,81 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 
 	// upload geometry
 	{
-		// main - 11715
-		CSVGeometryLoader geom = CSVGeometryLoader::loadFrom("11715.csv");
-
-		indices = new XMINT4[idsCnt = geom.indices.size()];
-		std::copy(geom.indices.begin(), geom.indices.end(), indices);
-
-		vertices = new Vector4[vtsCnt = geom.vertices.size()];
-		std::copy(geom.vertices.begin(), geom.vertices.end(), vertices);
+		// main - 11715 sponza
+		CSVGeometryLoader::loadFrom("sponza.csv", &m_indices, &m_vertices);
 	}
 
-	// create indices constant buffer
+	// create indices buffer
 	{
 		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ idsCnt * sizeof(XMINT4) },
-			.Usage{ D3D11_USAGE_DEFAULT },
-			.BindFlags{ D3D11_BIND_CONSTANT_BUFFER },
+			.ByteWidth{ static_cast<UINT>(m_indices.size() * sizeof(XMINT4)) },
+			.Usage{ D3D11_USAGE_IMMUTABLE },
+			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
+			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
 			.StructureByteStride{ sizeof(XMINT4) }
 		};
 
-		D3D11_SUBRESOURCE_DATA data{ indices, idsCnt * sizeof(XMINT4) };
+		D3D11_SUBRESOURCE_DATA data{ m_indices.data(), m_indices.size() * sizeof(XMINT4)};
 
-		hr = m_pDevice->CreateBuffer(&desc, &data, &m_pIdsConstBuffer);
+		hr = m_pDevice->CreateBuffer(&desc, &data, &m_pIndexBuffer);
 		THROW_IF_FAILED(hr);
 
-		hr = setResourceName(m_pIdsConstBuffer, "IndexConstBuffer");
+		hr = setResourceName(m_pIndexBuffer, "IndexBuffer");
+		THROW_IF_FAILED(hr);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
+			.Format{ DXGI_FORMAT_UNKNOWN },
+			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
+			.Buffer{
+				.FirstElement{ 0 },
+				.NumElements{ static_cast<UINT>(m_indices.size()) }
+			}
+		};
+
+		hr = m_pDevice->CreateShaderResourceView(m_pIndexBuffer, &descSRV, &m_pIndexBufferSRV);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pIndexBufferSRV, "IndexBufferSRV");
 		THROW_IF_FAILED(hr);
 	}
 
-	// create vertices constant buffer
+	// create vertices buffer
 	{
 		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ vtsCnt * sizeof(Vector4) },
-			.Usage{ D3D11_USAGE_DEFAULT },
-			.BindFlags{ D3D11_BIND_CONSTANT_BUFFER },
+			.ByteWidth{ static_cast<UINT>(m_vertices.size() * sizeof(Vector4)) },
+			.Usage{ D3D11_USAGE_IMMUTABLE },
+			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
+			.MiscFlags{ D3D11_RESOURCE_MISC_BUFFER_STRUCTURED },
 			.StructureByteStride{ sizeof(Vector4) }
 		};
 
-		D3D11_SUBRESOURCE_DATA data{ vertices, vtsCnt * sizeof(Vector4) };
+		D3D11_SUBRESOURCE_DATA data{ m_vertices.data(), m_vertices.size() * sizeof(Vector4)};
 
-		hr = m_pDevice->CreateBuffer(&desc, &data, &m_pVtsConstBuffer);
+		hr = m_pDevice->CreateBuffer(&desc, &data, &m_pVertexBuffer);
 		THROW_IF_FAILED(hr);
 
-		hr = setResourceName(m_pVtsConstBuffer, "VertexConstBuffer");
+		hr = setResourceName(m_pVertexBuffer, "VertexConstBuffer");
+		THROW_IF_FAILED(hr);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV{
+			.Format{ DXGI_FORMAT_UNKNOWN },
+			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
+			.Buffer{
+				.FirstElement{ 0 },
+				.NumElements{ static_cast<UINT>(m_vertices.size()) }
+			}
+		};
+
+		hr = m_pDevice->CreateShaderResourceView(m_pVertexBuffer, &descSRV, &m_pVertexBufferSRV);
+		THROW_IF_FAILED(hr);
+
+		hr = setResourceName(m_pVertexBufferSRV, "VertexBufferSRV");
 		THROW_IF_FAILED(hr);
 	}
 
-	// create model buffer
+	// create model const buffer
 	{
+		m_modelBuffer.primsCnt.x = m_indices.size();
 		m_modelBuffer.updateMatrices();
 
 		D3D11_BUFFER_DESC desc{
@@ -94,7 +120,6 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 	// shader processing
 	{
 		ID3DBlob* pBlob{};
-		//hr = loadShaderBlob(L"RayTracingCS.cso", &pBlob);
 		std::wstring filepath{ L"RayTracingCS.cso" };
 		hr = D3DReadFileToBlob(filepath.c_str(), &pBlob);
 		THROW_IF_FAILED(hr);
@@ -113,7 +138,7 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 
 	resizeUAV(tex);
 
-	m_pBVH = new BVH(m_pDevice, m_pDeviceContext);
+	m_pBVH = new BVH(m_pDevice, m_pDeviceContext, m_indices.size());
 
 	// timers init
 	m_pGPUTimer = new GPUTimer(m_pDevice, m_pDeviceContext);
@@ -130,8 +155,8 @@ void Geometry::term() {
 	SAFE_RELEASE(m_pUAVTexture);
 	SAFE_RELEASE(m_pRayTracingCS);
 	SAFE_RELEASE(m_pModelBuffer);
-	SAFE_RELEASE(m_pIdsConstBuffer);
-	SAFE_RELEASE(m_pVtsConstBuffer);
+	SAFE_RELEASE(m_pIndexBuffer);
+	SAFE_RELEASE(m_pVertexBuffer);
 }
 
 void Geometry::update(float delta, bool isRotate) {
@@ -150,7 +175,7 @@ void Geometry::update(float delta, bool isRotate) {
 void Geometry::updateBVH() {
 	m_pCPUTimer->start();
 
-	m_pBVH->build(vertices, vtsCnt, indices, idsCnt, m_modelBuffer.mModel);
+	m_pBVH->build(m_vertices.data(), m_vertices.size(), m_indices.data(), m_indices.size(), m_modelBuffer.mModel);
 
 	m_pCPUTimer->stop();
 
@@ -170,18 +195,15 @@ void Geometry::resizeUAV(ID3D11Texture2D* tex) {
 }
 
 void Geometry::rayTracing(ID3D11Buffer* m_pSBuf, ID3D11Buffer* m_pRTBuf, int w, int h) {
-	ID3D11Buffer* constBuffers[5]{
-		m_pVtsConstBuffer,
-		m_pIdsConstBuffer,
+	ID3D11Buffer* constBuffers[2]{
 		m_pModelBuffer,
-		m_pBVH->getPrimIdsBuffer(),
 		m_pRTBuf
 	};
-	m_pDeviceContext->CSSetConstantBuffers(0, 5, constBuffers);
+	m_pDeviceContext->CSSetConstantBuffers(0, 2, constBuffers);
 
 	// bind srv
-	ID3D11ShaderResourceView* srvBuffers[]{ m_pBVH->getBVHBufferSRV()};
-	m_pDeviceContext->CSSetShaderResources(0, 1, srvBuffers);
+	ID3D11ShaderResourceView* srvBuffers[]{ m_pVertexBufferSRV, m_pIndexBufferSRV, m_pBVH->getPrimIdsBufferSRV(), m_pBVH->getBVHBufferSRV()};
+	m_pDeviceContext->CSSetShaderResources(0, 4, srvBuffers);
 
 	// unbind rtv
 	ID3D11RenderTargetView* nullRtv{};
