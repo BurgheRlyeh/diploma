@@ -788,7 +788,7 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	std::vector<int> offsets(2 * m_primsCnt - 1);
 	m_frmSize = frmSize;
 	for (int i{ m_frmSize }; i < m_primsCnt; ++i) {
-		int leaf0{ findBestLeafBruteforce((*m_edge).x) };
+		//int leaf0{ findBestLeafBruteforce((*m_edge).x) };
 		int leaf{};
 		if (m_algInsert == 1)
 			leaf = findBestLeafMorton((*m_edge).x, (*m_edge).z);
@@ -1030,9 +1030,9 @@ int BVH::findBestLeafBVHNodes(int primId, int frmNearest) {
 int BVH::findBestLeafBVH(int primId, int frmNearest) {
 	Primitive prim = m_prims[primId];
 
-	int bestLeaf{ frmNearest };
-	float bestCost{ std::numeric_limits<float>::max() };
-	//float bestCost{ primInsertMetric(primId, m_frame[frmNearest].w) };
+	int bestLeaf{ static_cast<int>(m_frame[frmNearest].w) };
+	//float bestCost{ std::numeric_limits<float>::max() };
+	float bestCost{ primInsertMetric(primId, m_frame[frmNearest].w) };
 
 	//std::queue<std::pair<int, float>> nodes{};
 	auto cmp = [](const std::pair<int, float>& a, const std::pair<int, float>& b) {
@@ -1081,7 +1081,7 @@ int BVH::findBestLeafBVH(int primId, int frmNearest) {
 		//nodes.push({ r, cost + AABB::bbUnion(m_nodes[r].bb, prim.bb).area() - m_nodes[r].bb.area() });
 	}
 
-	return bestLeaf != -1 ? bestLeaf : frmNearest;
+	return bestLeaf;
 }
 
 void BVH::subdivideStohIntel(int nodeId) {

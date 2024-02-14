@@ -126,7 +126,7 @@ private:
 	// 3 - bvh prims +
 	// 4 - bvh tree
 	// 5 - bvh nodes
-	int m_algInsert{ 6 };
+	int m_algInsert{ 1 };
 
 	float m_primWeightMin{};
 	float m_primWeightMax{};

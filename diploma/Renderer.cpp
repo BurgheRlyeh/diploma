@@ -348,9 +348,9 @@ bool Renderer::render() {
 		m_fps = 1e3 * m_frameCnt / (time - m_prevSec);
 		m_prevSec = time;
 
-		double bvhTimeAvg{ m_pGeom->m_pCPUTimer->getAcc() };
-		if (bvhTimeAvg)
-			m_geomCPUAvgTime = bvhTimeAvg / m_frameCnt;
+		//double bvhTimeAvg{ m_pGeom->m_pCPUTimer->getTime() };
+		//if (bvhTimeAvg)
+			//m_geomCPUAvgTime = bvhTimeAvg / m_frameCnt;
 		
 		
 		m_geomGPUAvgTime = m_pGeom->m_pGPUTimer->getAcc() / m_frameCnt;
@@ -374,7 +374,7 @@ bool Renderer::render() {
 		ImGui::Text("Height: %d", m_height);
 
 		ImGui::Text("");
-		ImGui::Text("Last BVH construction time (ms): %.3f", m_geomCPUAvgTime);
+		ImGui::Text("Last BVH construction time (ms): %.3f", m_pGeom->m_pCPUTimer->getTime());
 		ImGui::Text("Average BVH traverse time (ms): %.3f", m_geomGPUAvgTime);
 
 		ImGui::End();
