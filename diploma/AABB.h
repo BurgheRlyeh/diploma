@@ -52,6 +52,16 @@ struct AABB {
         return 2 * (e.x * e.y + e.y * e.z + e.z * e.x);
     }
 
+    inline int extentMax() const {
+        DirectX::SimpleMath::Vector4 d{ diagonal() };
+        if (d.x > d.y && d.x > d.z)
+            return 0;
+        else if (d.y > d.z)
+            return 1;
+        else
+            return 2;
+    }
+
     inline DirectX::SimpleMath::Vector4 relateVecPos(
         const DirectX::SimpleMath::Vector4& v
     ) const {

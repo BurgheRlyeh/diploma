@@ -102,6 +102,9 @@ private:
 	std::vector<XMUINT4> m_frame{};
 	std::vector<XMUINT4>::iterator m_edge{};
 
+	AABB m_aabbAllCtrs{};
+	AABB m_aabbAllPrims{};
+
 	INT m_primsCnt{};
 
 	INT m_nodesUsed{ 1 };
@@ -123,7 +126,17 @@ private:
 	// 3 - bvh prims +
 	// 4 - bvh tree
 	// 5 - bvh nodes
-	int m_algInsert{ 1 };
+	int m_algInsert{ 6 };
+
+	float m_primWeightMin{};
+	float m_primWeightMax{};
+
+	float m_clampBase{ sqrtf(2.f) };
+	int m_clampOffset{ 32 };
+	int m_clampBinCnt{ 64 };
+
+	float m_clamp{};
+	int m_clampedCnt{};
 
 	float m_frmPart{ 0.1f };
 	float m_uniform{ 0.f };
@@ -182,6 +195,7 @@ private:
 	int findBestLeafBVHPrimsPlus(int primId, int frmNearest);
 	int findBestLeafBVHTree(int primId, int frmNearest);
 	int findBestLeafBVHNodes(int primId, int frmNearest);
+	int findBestLeafBVH(int primId, int frmNearest);
 
 	// TODO with backtrack memory
 	int leftLeaf(int leaf) {
@@ -240,6 +254,8 @@ private:
 
 	void subdivideStoh(INT nodeId);
 	void subdivideStohQueue(INT rootId);
+	void subdivideStohIntel(INT rootId);
+	void subdivideStohIntelQueue(INT rootId);
 	void subdivideStoh2(INT nodeId);
 	void updateNodeBoundsStoh(INT nodeIdx);
 	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);

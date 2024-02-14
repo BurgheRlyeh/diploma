@@ -364,7 +364,7 @@ bool Renderer::render() {
 	ImGui::NewFrame();
 
 	{
-		ImGui::Begin("App Statistics");
+		ImGui::Begin("Statistics");
 
 		ImGui::Text("FPS: %.1f", m_fps);
 
@@ -373,75 +373,15 @@ bool Renderer::render() {
 		ImGui::Text("Width: %d", m_width);
 		ImGui::Text("Height: %d", m_height);
 
+		ImGui::Text("");
+		ImGui::Text("Last BVH construction time (ms): %.3f", m_geomCPUAvgTime);
+		ImGui::Text("Average BVH traverse time (ms): %.3f", m_geomGPUAvgTime);
+
 		ImGui::End();
 	}
 
 	m_pGeom->m_pBVH->renderBVHImGui();
 	m_pGeom->m_pBVH->renderAABBsImGui();
-
-	//{
-	//	ImGui::Begin("BVH");
-
-	//	ImGui::Text("Split algorithm:");
-
-	//	bool isDichotomy{ m_pGeom->m_bvh.m_alg == 0 };
-	//	ImGui::Checkbox("Dichotomy", &isDichotomy);
-	//	if (isDichotomy) {
-	//		m_pGeom->m_bvh.m_alg = 0;
-	//		ImGui::DragInt("Primitives per leaf", &m_pGeom->m_bvh.m_primsPerLeaf, 1, 2, 32);
-	//	}
-
-	//	bool isSAH{ m_pGeom->m_bvh.m_alg == 1 };
-	//	ImGui::Checkbox("SAH", &isSAH);
-	//	if (isSAH) m_pGeom->m_bvh.m_alg = 1;
-
-	//	bool isFixedStepSAH{ m_pGeom->m_bvh.m_alg == 2 };
-	//	ImGui::Checkbox("FixedStepSAH", &isFixedStepSAH);
-	//	if (isFixedStepSAH) {
-	//		m_pGeom->m_bvh.m_alg = 2;
-	//		ImGui::DragInt("SAH step", &m_pGeom->m_bvh.m_sahSteps, 1, 2, 32);
-	//	}
-
-	//	bool isBinnedSAH{ m_pGeom->m_bvh.m_alg == 3 };
-	//	ImGui::Checkbox("BinnedSAH", &isBinnedSAH);
-	//	if (isBinnedSAH) {
-	//		m_pGeom->m_bvh.m_alg = 3;
-	//		ImGui::DragInt("SAH step", &m_pGeom->m_bvh.m_sahSteps, 1, 2, 32);
-	//	}
-
-	//	bool isStochastic{ m_pGeom->m_bvh.m_alg == 4 };
-	//	ImGui::Checkbox("Stochastic", &isStochastic);
-	//	if (isStochastic) {
-	//		m_pGeom->m_bvh.m_alg = 4;
-
-	//		float carcassPart{ 100.f * m_pGeom->m_bvh.m_frmPart };
-	//		ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 1.f, 100.f);
-	//		m_pGeom->m_bvh.m_frmPart = carcassPart / 100.f;
-
-	//		float carcassUniform{ 100.f * m_pGeom->m_bvh.m_uniform };
-	//		ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
-	//		m_pGeom->m_bvh.m_uniform = carcassUniform / 100.f;
-	//	}
-
-	//	ImGui::Text(" ");
-
-	//	ImGui::Text("Statistics:");
-	//	ImGui::Text(" ");
-	//	ImGui::Text("SAH cost: %.3f", m_pGeom->m_bvh.costSAH());
-	//	ImGui::Text(" ");
-	//	ImGui::Text("Last BVH construction time (ms): %.3f", m_geomCPUAvgTime);
-	//	ImGui::Text(" ");
-	//	ImGui::Text("Nodes: %d", m_pGeom->m_bvh.m_nodesUsed);
-	//	ImGui::Text("Leafs: %d", m_pGeom->m_bvh.m_leafsCnt);
-	//	ImGui::Text(" ");
-	//	ImGui::Text("Primitives: %d", m_pGeom->m_bvh.m_primsCnt);
-	//	ImGui::Text("Avg primitives per leaf: %.3f", 1.f * m_pGeom->m_bvh.m_primsCnt / m_pGeom->m_bvh.m_leafsCnt);
-	//	ImGui::Text(" ");
-	//	ImGui::Text("Min depth: %d", m_pGeom->m_bvh.m_depthMin);
-	//	ImGui::Text("Max depth: %d", m_pGeom->m_bvh.m_depthMax);
-
-	//	ImGui::End();
-	//}
 
 	{
 		ImGui::Begin("Ray Tracing");
@@ -475,12 +415,6 @@ bool Renderer::render() {
 			ImGui::Checkbox("Check T", &isTCheck);
 			m_rtBuffer.instsAlgLeafsTCheck.w = isTCheck ? 1 : 0;
 		}
-
-		ImGui::Text(" ");
-
-		ImGui::Text("Statistics:");
-
-		ImGui::Text("Average BVH traverse time (ms): %.3f", m_geomGPUAvgTime);
 
 		ImGui::End();
 	}
