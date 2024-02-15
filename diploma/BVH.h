@@ -89,6 +89,13 @@ private:
 		Vector4 v0{}, v1{}, v2{};
 		Vector4 ctr{};
 		AABB bb{};
+
+		void updCtrAndBB() {
+			ctr = (v0 + v1 + v2) / 3.f;
+			bb.grow(v0);
+			bb.grow(v1);
+			bb.grow(v2);
+		}
 	};
 	std::vector<Primitive> m_prims{};
 
@@ -126,6 +133,7 @@ private:
 	// 3 - bvh prims +
 	// 4 - bvh tree
 	// 5 - bvh nodes
+	// 6 - smart bvh
 	int m_algInsert{ 1 };
 
 	float m_primWeightMin{};
@@ -195,7 +203,7 @@ private:
 	int findBestLeafBVHPrimsPlus(int primId, int frmNearest);
 	int findBestLeafBVHTree(int primId, int frmNearest);
 	int findBestLeafBVHNodes(int primId, int frmNearest);
-	int findBestLeafBVH(int primId, int frmNearest);
+	int findBestLeafSmartBVH(int primId, int frmNearest);
 
 	// TODO with backtrack memory
 	int leftLeaf(int leaf) {
