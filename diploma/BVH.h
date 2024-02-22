@@ -112,6 +112,7 @@ private:
 	AABB m_aabbAllCtrs{};
 	AABB m_aabbAllPrims{};
 
+	int m_primsCntOrig{};
 	INT m_primsCnt{};
 
 	INT m_nodesUsed{ 1 };
@@ -136,6 +137,10 @@ private:
 	// 6 - smart bvh
 	int m_algInsert{ 1 };
 
+	// 0 - no prims splitting
+	// 1 - subset splitting before clustering
+	int m_primSplitting{};
+
 	float m_primWeightMin{};
 	float m_primWeightMax{};
 
@@ -145,9 +150,10 @@ private:
 
 	float m_clamp{};
 	int m_clampedCnt{};
+	int m_frmClampedCnt{};
 
-	float m_frmPart{ 0.1f };
-	float m_uniform{ 0.f };
+	float m_frmPart{ 0.2f };
+	float m_uniform{ 0.1f };
 	int m_insertSearchWindow{ 10 };
 
 	int m_frmSize{};

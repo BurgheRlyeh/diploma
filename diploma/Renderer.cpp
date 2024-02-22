@@ -1,5 +1,7 @@
 #include "Renderer.h"
 
+#include <cmath>
+
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
@@ -306,6 +308,10 @@ void Renderer::update() {
 
 void Renderer::updateBVH() {
 	m_pGeom->updateBVH();
+	m_fpsAcc = 0.0;
+	m_geomGPUAccTime = 0.0;
+	m_geomGPUAccSpeed = 0.0;
+	m_metricCnt = 0;
 }
 
 bool Renderer::render() {
@@ -346,14 +352,20 @@ bool Renderer::render() {
 	double time{ m_CPUTimer.curr() };
 	if (time - m_prevSec > 1e3) {
 		m_fps = 1e3 * m_frameCnt / (time - m_prevSec);
-		m_prevSec = time;
+		m_fpsAcc += m_fps;
 
-		//double bvhTimeAvg{ m_pGeom->m_pCPUTimer->getTime() };
-		//if (bvhTimeAvg)
-			//m_geomCPUAvgTime = bvhTimeAvg / m_frameCnt;
+		m_prevSec = time;
 		
-		
-		m_geomGPUAvgTime = m_pGeom->m_pGPUTimer->getAcc() / m_frameCnt;
+		double geomGPUAvgTime{ m_pGeom->m_pGPUTimer->getAcc() / m_frameCnt };
+		if (std::isfinite<double>(geomGPUAvgTime)) {
+			++m_metricCnt;
+
+			m_geomGPUFrameAvgTime = geomGPUAvgTime;
+			m_geomGPUAccTime += m_geomGPUFrameAvgTime;
+
+			m_geomGPUFrameAvgSpeed = m_width * m_height / geomGPUAvgTime;
+			m_geomGPUAccSpeed += m_geomGPUFrameAvgSpeed;
+		}
 
 		m_frameCnt = 0;
 	}
@@ -367,6 +379,7 @@ bool Renderer::render() {
 		ImGui::Begin("Statistics");
 
 		ImGui::Text("FPS: %.1f", m_fps);
+		ImGui::Text("Avg FPS: %.1f", m_fpsAcc / m_metricCnt);
 
 		ImGui::Text("");
 
@@ -374,8 +387,15 @@ bool Renderer::render() {
 		ImGui::Text("Height: %d", m_height);
 
 		ImGui::Text("");
+		ImGui::Text("Last time:");
 		ImGui::Text("Last BVH construction time (ms): %.3f", m_pGeom->m_pCPUTimer->getTime());
-		ImGui::Text("Average BVH traverse time (ms): %.3f", m_geomGPUAvgTime);
+		ImGui::Text("Last BVH traverse time (ms): %.3f", m_geomGPUFrameAvgTime);
+		ImGui::Text("Last BVH traverse speed (MRay/s): %.3f", m_geomGPUFrameAvgSpeed / 1e3);
+
+		ImGui::Text("");
+		ImGui::Text("Avg time:");
+		ImGui::Text("Avg BVH traverse time (ms): %.3f", m_geomGPUAccTime / m_metricCnt);
+		ImGui::Text("Avg BVH traverse speed (MRay/s): %.3f", m_geomGPUAccSpeed / 1e3 / m_metricCnt);
 
 		ImGui::End();
 	}

@@ -149,7 +149,7 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, unsigned in
 	// create prim indices buffer
 	{
 		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ primsCnt * sizeof(XMINT4) },
+			.ByteWidth{ (2 * primsCnt - 1) * sizeof(XMINT4) },
 			.Usage{ D3D11_USAGE_DYNAMIC },
 			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
 			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
@@ -168,7 +168,7 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, unsigned in
 			.ViewDimension{ D3D11_SRV_DIMENSION_BUFFER },
 			.Buffer{
 				.FirstElement{ 0 },
-				.NumElements{ primsCnt }
+				.NumElements{ (2 * primsCnt - 1) }
 			}
 		};
 
@@ -423,6 +423,9 @@ void BVH::renderBVHImGui() {
 
 		ImGui::Text("Clamp: %.3f", m_clamp);
 		ImGui::Text("# of clamped: %d", m_clampedCnt);
+		ImGui::Text("# of clamped in frame: %d", m_frmClampedCnt);
+
+		ImGui::Text("Frame size: %d", static_cast<int>(std::round(m_primsCnt * m_frmPart)));
 
 		float carcassPart{ 100.f * m_frmPart };
 		ImGui::DragFloat("Part for carcass", &carcassPart, 1.f, 1.f, 100.f);
@@ -469,6 +472,16 @@ void BVH::renderBVHImGui() {
 				static_cast<int>(std::round(m_primsCnt * m_frmPart))
 			);
 		}
+
+		ImGui::Text("Prims splitting:");
+
+		bool isNoSplit{ m_primSplitting == 0 };
+		ImGui::Checkbox("No splitting", &isNoSplit);
+		if (isNoSplit) m_primSplitting = 0;
+
+		bool isSplitSubsetBeforeCluster{ m_primSplitting == 1 };
+		ImGui::Checkbox("Subset only", &isSplitSubsetBeforeCluster);
+		if (isSplitSubsetBeforeCluster) m_primSplitting = 1;
 	}
 
 	ImGui::Text(" ");
@@ -615,7 +628,7 @@ void BVH::render(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer) {
 //	LOGIC PART
 // ------------
 void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
-	m_primsCnt = idsCnt;
+	m_primsCntOrig = m_primsCnt = idsCnt;
 
 	m_nodesUsed = 1;
 	m_leafsCnt = 0;
@@ -708,7 +721,7 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 
 	// primitive probability, compensate uniformity
 	float s{ 1.f / (m_primsCnt * m_frmPart) };
-	s = (s - m_uniform / m_primsCnt) / (1 - m_uniform);
+	s = (s - m_uniform / m_primsCnt) / std::max<float>(1.f - m_uniform, std::numeric_limits<float>::epsilon());
 
 	// unclamped & clamped sums, clamp
 	float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
@@ -752,6 +765,7 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	sum = cdf[m_primsCnt - 1];
 
 	// selecting for carcass
+	m_frmClampedCnt = 0;
 	int frmSize{}, frmExpSize{ static_cast<int>(std::round(m_primsCnt * m_frmPart)) };
 	m_frame.clear();
 	m_frame.resize(frmExpSize);
@@ -765,6 +779,7 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 		}
 
 		m_frame[frmSize] = *it;
+		m_frmClampedCnt += (*it).w;
 
 		(*it).z = frmSize++;
 		prob = 1.f * frmSize / frmExpSize;
@@ -810,9 +825,48 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 		++m_edge;
 	}
 
-	std::vector<XMUINT4> temp{ static_cast<size_t>(m_primsCnt) };
-	for (int i{}, j{}; j < m_primsCnt; ++i, j = m_primMortonFrmLeaf[j].y) {
-		temp[i] = m_primMortonFrmLeaf[j];
+
+	std::vector<XMUINT4> temp;
+	if (!m_primSplitting)
+		temp.resize(m_primsCnt);
+	else {
+		temp.resize(m_primsCnt + 4 * m_clampedCnt);
+		m_prims.resize(m_primsCnt + 4 * m_clampedCnt);
+	}
+
+	for (int i{}, j{}; j < m_primsCntOrig; ++i, j = m_primMortonFrmLeaf[j].y) {
+		if (!m_primSplitting) {
+			temp[i] = m_primMortonFrmLeaf[j];
+		}
+		else if (m_primSplitting == 1) {
+			if (!m_primMortonFrmLeaf[j].w) {
+				temp[i] = m_primMortonFrmLeaf[j];
+				continue;
+			}
+
+			Primitive& p{ m_prims[m_primMortonFrmLeaf[j].x] };
+			m_nodes[m_frame[m_primMortonFrmLeaf[j].z].w].leftCntPar.w += 3;
+
+			Primitive p0{ .v0{ p.v0 }, .v1{ (p.v0 + p.v1) / 2.f }, .v2{ (p.v0 + p.v2) / 2.f } };
+			p0.updCtrAndBB();
+			m_prims[m_primsCnt] = p0;
+			temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+
+			Primitive p1{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ p.v1 }, .v2{ (p.v1 + p.v2) / 2.f } };
+			p1.updCtrAndBB();
+			m_prims[m_primsCnt] = p1;
+			temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+
+			Primitive p2{ .v0{ (p.v0 + p.v2) / 2.f }, .v1{ (p.v1 + p.v2) / 2.f }, .v2{ p.v2 } };
+			p2.updCtrAndBB();
+			m_prims[m_primsCnt] = p2;
+			temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+
+			Primitive p3{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ (p.v0 + p.v2) / 2.f }, .v2{ (p.v1 + p.v2) / 2.f } };
+			p3.updCtrAndBB();
+			m_prims[m_primsCnt] = p3;
+			temp[i] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		}
 	}
 	m_primMortonFrmLeaf = temp;
 
@@ -874,9 +928,15 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	});
 
 	for (int i{}; i < m_primsCnt; ++i) {
-		m_primMortonFrmLeaf[i] = {
-			m_primMortonFrmLeaf[i].x, 0, 0, 0
-		};
+		if (!m_primSplitting) {
+			m_primMortonFrmLeaf[i] = { m_primMortonFrmLeaf[i].x, 0, 0, 0 };
+		}
+		else if (m_primSplitting == 1) {
+			unsigned int primId{
+				m_primMortonFrmLeaf[i].x < m_primsCntOrig ? m_primMortonFrmLeaf[i].x : m_primMortonFrmLeaf[i].y
+			};
+			m_primMortonFrmLeaf[i] = { primId, 0, 0, 0 };
+		}
 	}
 	  
 	m_nodes[0] = m_nodes[0];
@@ -1422,8 +1482,6 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 
 		nodes.push(leftId);
 		nodes.push(rightId);
-		//subdivideStohIntel(leftId);
-		//subdivideStohIntel(rightId);
 	}
 }
 

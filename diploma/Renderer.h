@@ -67,8 +67,11 @@ class Renderer {
 	Camera* m_pCamera{};
 
 	Geometry* m_pGeom{};
-	double m_geomCPUAvgTime{};
-	double m_geomGPUAvgTime{};
+	double m_geomGPUFrameAvgTime{};
+	double m_geomGPUAccTime{};
+	double m_geomGPUFrameAvgSpeed{};
+	double m_geomGPUAccSpeed{};
+	long long m_metricCnt{};
 	DirectX::XMINT4 m_highlights{ 0, 0, 0, -1};
 
 	bool m_isModelRotate{};
@@ -81,6 +84,7 @@ class Renderer {
 	// framerate
 	UINT m_frameCnt{};
 	double m_fps{};
+	double m_fpsAcc{};
 
 
 public:

@@ -1,3 +1,4 @@
+#include <cmath>
 #include "Timer.h"
 
 using namespace std;
@@ -55,7 +56,9 @@ void GPUTimer::stop() {
 	m_pDeviceContext->End(m_pTimeStop);
 	m_pDeviceContext->End(m_pDisjoint);
 
-	m_acc += getTime();
+	double time{ getTime() };
+	if (std::isfinite<double>(time))
+		m_acc += time;
 }
 
 double GPUTimer::getTime() {
