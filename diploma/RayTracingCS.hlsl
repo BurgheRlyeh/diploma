@@ -328,6 +328,10 @@ void main(uint3 DTid: SV_DispatchThreadID) {
         color.x += (1.f - color.x) / 0.5f;
     }
     
+    if (triIdx[best.tId].w == 1) {
+        color.z += (1.f - color.z) / 0.5f;
+    }
+    
     //if (best.tId == highlights.x) {
     //    color.x += (1.f - color.x) / 4.f;
     //    color.yz -= (float2(1.f, 1.f) - color.yz) / 2.f;

@@ -139,7 +139,9 @@ private:
 
 	// 0 - no prims splitting
 	// 1 - subset splitting before clustering
-	int m_primSplitting{};
+	// 2 - prev clamp hist interval (naive)
+	// 3 - clamped w/o uniform (smart)
+	int m_primSplitting{ 3 };
 
 	float m_primWeightMin{};
 	float m_primWeightMax{};
@@ -150,10 +152,10 @@ private:
 
 	float m_clamp{};
 	int m_clampedCnt{};
-	int m_frmClampedCnt{};
+	int m_splitCnt{};
 
 	float m_frmPart{ 0.2f };
-	float m_uniform{ 0.1f };
+	float m_uniform{ 0.75f };
 	int m_insertSearchWindow{ 10 };
 
 	int m_frmSize{};

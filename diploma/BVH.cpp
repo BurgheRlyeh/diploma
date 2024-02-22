@@ -423,7 +423,7 @@ void BVH::renderBVHImGui() {
 
 		ImGui::Text("Clamp: %.3f", m_clamp);
 		ImGui::Text("# of clamped: %d", m_clampedCnt);
-		ImGui::Text("# of clamped in frame: %d", m_frmClampedCnt);
+		ImGui::Text("# of splitted: %d", m_splitCnt);
 
 		ImGui::Text("Frame size: %d", static_cast<int>(std::round(m_primsCnt * m_frmPart)));
 
@@ -482,6 +482,14 @@ void BVH::renderBVHImGui() {
 		bool isSplitSubsetBeforeCluster{ m_primSplitting == 1 };
 		ImGui::Checkbox("Subset only", &isSplitSubsetBeforeCluster);
 		if (isSplitSubsetBeforeCluster) m_primSplitting = 1;
+
+		bool isSplitNaive{ m_primSplitting == 2 };
+		ImGui::Checkbox("Split prev hist interval", &isSplitNaive);
+		if (isSplitNaive) m_primSplitting = 2;
+
+		bool isSplitSmart{ m_primSplitting == 3 };
+		ImGui::Checkbox("Split big without uniform", &isSplitSmart);
+		if (isSplitSmart) m_primSplitting = 3;
 	}
 
 	ImGui::Text(" ");
@@ -719,42 +727,95 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	m_primWeightMin = wmin;
 	m_primWeightMax = wmax;
 
-	// primitive probability, compensate uniformity
-	float s{ 1.f / (m_primsCnt * m_frmPart) };
-	s = (s - m_uniform / m_primsCnt) / std::max<float>(1.f - m_uniform, std::numeric_limits<float>::epsilon());
+	if (!m_primSplitting || m_primSplitting == 1) {
+		// primitive probability, compensate uniformity
+		float s{ 1.f / (m_primsCnt * m_frmPart) };
+		s = (s - m_uniform / m_primsCnt) / std::max<float>(1.f - m_uniform, std::numeric_limits<float>::epsilon());
 
-	// unclamped & clamped sums, clamp
-	float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
-	float clamp{ std::numeric_limits<float>::max() };
+		// unclamped & clamped sums, clamp
+		float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
+		float clamp{ std::numeric_limits<float>::max() };
 
-	// selection of clamp
-	for (int i{}; i < m_clampBinCnt - 1; ++i) {
-		float c{ powf(m_clampBase, i - m_clampOffset + 1) };
-		float val{ c / (uSum + c * cSum) };
-		if (c / (uSum + c * cSum) >= s) {
-			clamp = c;
-			break;
-		}
-		uSum += c * bin_cnts[i];
-		cSum -= bin_cnts[i];
-	}
-	m_clamp = clamp;
-
-	// reweighting if found
-	m_clampedCnt = 0;
-	if (clamp != std::numeric_limits<float>::max()) {
-		sum = 0.f;
-		for (int i{}; i < m_primsCnt; ++i) {
-			if (clamp < cdf[i]) {
-				cdf[i] = clamp;
-				m_primMortonFrmLeaf[i].w = 1;
-				++m_clampedCnt;
+		// selection of clamp
+		for (int i{}; i < m_clampBinCnt - 1; ++i) {
+			float c{ powf(m_clampBase, i - m_clampOffset + 1) };
+			float val{ c / (uSum + c * cSum) };
+			if (c / (uSum + c * cSum) >= s) {
+				clamp = c;
+				break;
 			}
-			sum += cdf[i];
+			uSum += c * bin_cnts[i];
+			cSum -= bin_cnts[i];
+		}
+		m_clamp = clamp;
+
+		// reweighting if found
+		m_clampedCnt = 0;
+		if (clamp != std::numeric_limits<float>::max()) {
+			sum = 0.f;
+			for (int i{}; i < m_primsCnt; ++i) {
+				if (clamp < cdf[i]) {
+					cdf[i] = clamp;
+					if (m_primSplitting) m_primMortonFrmLeaf[i].w = 1;
+					++m_clampedCnt;
+				}
+				sum += cdf[i];
+			}
+		}
+		else {
+			m_clamp = -1.f;
 		}
 	}
 	else {
-		m_clamp = -1.f;
+		// primitive probability, compensate uniformity
+		float s{ 1.f / (m_primsCnt * m_frmPart) };
+		float su{
+			(s - m_uniform / m_primsCnt) / std::max<float>(1.f - m_uniform, std::numeric_limits<float>::epsilon())
+		};
+
+		// unclamped & clamped sums, clamp
+		float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
+		float clamp{ std::numeric_limits<float>::max() };
+		bool clampFind{};
+		float clampu{ std::numeric_limits<float>::max() };
+
+		// selection of clamp
+		for (int i{}; i < m_clampBinCnt - 1; ++i) {
+			float c{ powf(m_clampBase, i - m_clampOffset + 1) };
+			float val{ c / (uSum + c * cSum) };
+			if (m_primSplitting == 3 && !clampFind && c / (uSum + c * cSum) >= s) {
+				clamp = c;
+				clampFind = true;
+			}
+			if (c / (uSum + c * cSum) >= su) {
+				clampu = c;
+				break;
+			}
+			uSum += c * bin_cnts[i];
+			cSum -= bin_cnts[i];
+			if (m_primSplitting == 2)
+				clamp = c;
+		}
+		m_clamp = clampu;
+
+		// reweighting if found
+		m_clampedCnt = 0;
+		if (clampu != std::numeric_limits<float>::max()) {
+			sum = 0.f;
+			for (int i{}; i < m_primsCnt; ++i) {
+				if (clampu < cdf[i]) {
+					cdf[i] = clampu;
+					++m_clampedCnt;
+				}
+				else if (clamp < cdf[i]) {
+					m_primMortonFrmLeaf[i].w = 1;
+				}
+				sum += cdf[i];
+			}
+		}
+		else {
+			m_clamp = -1.f;
+		}
 	}
 
 	// reweighting with uniform dist & calc cdf
@@ -765,21 +826,21 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	sum = cdf[m_primsCnt - 1];
 
 	// selecting for carcass
-	m_frmClampedCnt = 0;
+	m_splitCnt = 0;
 	int frmSize{}, frmExpSize{ static_cast<int>(std::round(m_primsCnt * m_frmPart)) };
 	m_frame.clear();
 	m_frame.resize(frmExpSize);
 	float prob{ 1.f * (1.f * frmSize) / frmExpSize };
 	it = m_edge = m_primMortonFrmLeaf.begin();
 	for (int i{}; i < m_primsCnt; ++i) {
-		//prob = Sobol::sampleSobol(i);
+		m_splitCnt += (*it).w;
+
 		if (frmSize == frmExpSize || cdf[i] <= prob * sum) {
 			(*(it++)).z = frmSize - 1;
 			continue;
 		}
 
 		m_frame[frmSize] = *it;
-		m_frmClampedCnt += (*it).w;
 
 		(*it).z = frmSize++;
 		prob = 1.f * frmSize / frmExpSize;
@@ -830,43 +891,38 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 	if (!m_primSplitting)
 		temp.resize(m_primsCnt);
 	else {
-		temp.resize(m_primsCnt + 4 * m_clampedCnt);
-		m_prims.resize(m_primsCnt + 4 * m_clampedCnt);
+		temp.resize(2 * m_primsCnt - 1);
+		m_prims.resize(2 * m_primsCnt - 1);
 	}
 
 	for (int i{}, j{}; j < m_primsCntOrig; ++i, j = m_primMortonFrmLeaf[j].y) {
-		if (!m_primSplitting) {
+		if (!m_primSplitting || !m_primMortonFrmLeaf[j].w) {
 			temp[i] = m_primMortonFrmLeaf[j];
+			continue;
 		}
-		else if (m_primSplitting == 1) {
-			if (!m_primMortonFrmLeaf[j].w) {
-				temp[i] = m_primMortonFrmLeaf[j];
-				continue;
-			}
 
-			Primitive& p{ m_prims[m_primMortonFrmLeaf[j].x] };
-			m_nodes[m_frame[m_primMortonFrmLeaf[j].z].w].leftCntPar.w += 3;
+		Primitive& p{ m_prims[m_primMortonFrmLeaf[j].x] };
+		m_nodes[m_frame[m_primMortonFrmLeaf[j].z].w].leftCntPar.w += 3;
 
-			Primitive p0{ .v0{ p.v0 }, .v1{ (p.v0 + p.v1) / 2.f }, .v2{ (p.v0 + p.v2) / 2.f } };
-			p0.updCtrAndBB();
-			m_prims[m_primsCnt] = p0;
-			temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		Primitive p0{ .v0{ p.v0 }, .v1{ (p.v0 + p.v1) / 2.f }, .v2{ (p.v0 + p.v2) / 2.f } };
+		p0.updCtrAndBB();
+		m_prims[m_primsCnt] = p0;
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
 
-			Primitive p1{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ p.v1 }, .v2{ (p.v1 + p.v2) / 2.f } };
-			p1.updCtrAndBB();
-			m_prims[m_primsCnt] = p1;
-			temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		Primitive p1{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ p.v1 }, .v2{ (p.v1 + p.v2) / 2.f } };
+		p1.updCtrAndBB();
+		m_prims[m_primsCnt] = p1;
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
 
-			Primitive p2{ .v0{ (p.v0 + p.v2) / 2.f }, .v1{ (p.v1 + p.v2) / 2.f }, .v2{ p.v2 } };
-			p2.updCtrAndBB();
-			m_prims[m_primsCnt] = p2;
-			temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		Primitive p2{ .v0{ (p.v0 + p.v2) / 2.f }, .v1{ (p.v1 + p.v2) / 2.f }, .v2{ p.v2 } };
+		p2.updCtrAndBB();
+		m_prims[m_primsCnt] = p2;
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
 
-			Primitive p3{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ (p.v0 + p.v2) / 2.f }, .v2{ (p.v1 + p.v2) / 2.f } };
-			p3.updCtrAndBB();
-			m_prims[m_primsCnt] = p3;
-			temp[i] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
-		}
+		Primitive p3{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ (p.v0 + p.v2) / 2.f }, .v2{ (p.v1 + p.v2) / 2.f } };
+		p3.updCtrAndBB();
+		m_prims[m_primsCnt] = p3;
+		temp[i] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
 	}
 	m_primMortonFrmLeaf = temp;
 
@@ -927,15 +983,14 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 		//});
 	});
 
-	for (int i{}; i < m_primsCnt; ++i) {
-		if (!m_primSplitting) {
-			m_primMortonFrmLeaf[i] = { m_primMortonFrmLeaf[i].x, 0, 0, 0 };
-		}
-		else if (m_primSplitting == 1) {
-			unsigned int primId{
-				m_primMortonFrmLeaf[i].x < m_primsCntOrig ? m_primMortonFrmLeaf[i].x : m_primMortonFrmLeaf[i].y
-			};
-			m_primMortonFrmLeaf[i] = { primId, 0, 0, 0 };
+	if (m_primSplitting) {
+		for (int i{}; i < m_primsCnt; ++i) {
+			bool isSplitted{ m_primMortonFrmLeaf[i].x >= m_primsCntOrig };
+			if (isSplitted) {
+				unsigned int primId{ m_primMortonFrmLeaf[i].y };
+				m_primMortonFrmLeaf[i].x = primId;
+				m_primMortonFrmLeaf[primId].w = 1;
+			}
 		}
 	}
 	  
