@@ -135,7 +135,13 @@ private:
 	// 4 - bvh tree
 	// 5 - bvh nodes
 	// 6 - smart bvh
-	int m_algInsert{ 1 };
+	int m_algInsert{ 6 };
+	
+	// 0 - orig
+	// 1 - upd prims cnt
+	// 2 - upd aabb
+	// 3 - upd prims cnt & aabb
+	int m_algInsertConds{};
 
 	// 0 - no prims splitting
 	// 1 - subset splitting before clustering
@@ -155,7 +161,7 @@ private:
 	int m_splitCnt{};
 
 	float m_frmPart{ 0.2f };
-	float m_uniform{ 0.75f };
+	float m_uniform{ 0.1f };
 	int m_insertSearchWindow{ 10 };
 
 	int m_frmSize{};

@@ -473,6 +473,24 @@ void BVH::renderBVHImGui() {
 			);
 		}
 
+		ImGui::Text("Insertion prims algorithm conditions:");
+
+		bool isInsertNoExt{ m_algInsertConds == 0 };
+		ImGui::Checkbox("Original insert conditions", &isInsertNoExt);
+		if (isInsertNoExt) m_algInsertConds = 0;
+
+		bool isInsertUpdCnt{ m_algInsertConds == 1 };
+		ImGui::Checkbox("Update prims count", &isInsertUpdCnt);
+		if (isInsertUpdCnt) m_algInsertConds = 1;
+
+		bool isInsertUpdAABB{ m_algInsertConds == 2 };
+		ImGui::Checkbox("Update AABB", &isInsertUpdAABB);
+		if (isInsertUpdAABB) m_algInsertConds = 2;
+
+		bool isInsertUpdAll{ m_algInsertConds == 3 };
+		ImGui::Checkbox("Update all", &isInsertUpdAll);
+		if (isInsertUpdAll) m_algInsertConds = 3;
+
 		ImGui::Text("Prims splitting:");
 
 		bool isNoSplit{ m_primSplitting == 0 };
@@ -876,8 +894,10 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 			leaf = findBestLeafSmartBVH((*m_edge).x, (*m_edge).z);
 		else
 			leaf = findBestLeafBruteforce((*m_edge).x);
-		 
+		
 		++m_nodes[leaf].leftCntPar.w;
+		if (m_algInsertConds == 2 || m_algInsertConds == 3)
+			m_nodes[leaf].bb.grow(m_prims[(*m_edge).x].bb);
 
 		XMUINT4& frmPrim{ m_primMortonFrmLeaf[m_nodes[leaf].leftCntPar.x] };
 		m_primMortonFrmLeaf[i].y = frmPrim.y;
@@ -885,7 +905,6 @@ void BVH::buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Mat
 
 		++m_edge;
 	}
-
 
 	std::vector<XMUINT4> temp;
 	if (!m_primSplitting)
@@ -1001,9 +1020,13 @@ float BVH::primInsertMetric(int primId, int nodeId) {
 	Primitive prim = m_prims[primId];
 	BVHNode node = m_nodes[nodeId];
 
+	int leafPrimsCnt{ node.leftCntPar.y };
+	if (m_algInsertConds == 1 || m_algInsertConds == 3)
+		leafPrimsCnt += node.leftCntPar.w;
+
 	float cost{
-		(node.leftCntPar.y + 1) * AABB::bbUnion(node.bb, prim.bb).area()
-			- node.leftCntPar.y * node.bb.area()
+		(leafPrimsCnt + 1) * AABB::bbUnion(node.bb, prim.bb).area()
+			- (leafPrimsCnt) * node.bb.area()
 	};
 
 	do {
