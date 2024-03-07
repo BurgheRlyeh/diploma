@@ -124,7 +124,8 @@ private:
 	// 1 - sah
 	// 2 - fixed step sah
 	// 3 - binned sah
-	// 4  - stochastic
+	// 4 - stochastic
+	// 5 - psr
 	INT m_algBuild{ 4 };
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 32 };
@@ -182,7 +183,8 @@ public:
 private:
 	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 
-	void buildStochastic(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
+	void buildPsr(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
+	void buildStochastic();
 
 	template <typename T>
 	void preForEach(int nodeId, T f) {
@@ -191,6 +193,17 @@ private:
 		if (!m_nodes[nodeId].leftCntPar.y) {
 			preForEach(m_nodes[nodeId].leftCntPar.x, f);
 			preForEach(m_nodes[nodeId].leftCntPar.x + 1, f);
+		}
+	}
+
+	template <typename T>
+	void preForEachQuad(int nodeId, T f) {
+		f(nodeId);
+
+		if (!m_nodes[nodeId].leftCntPar.y) {
+			for (int i{}; i < m_nodes[nodeId].leftCntPar.w; ++i) {
+				preForEachQuad(m_nodes[nodeId].leftCntPar.x + i, f);
+			}
 		}
 	}
 
@@ -274,9 +287,9 @@ private:
 		return node;
 	}
 
-	void subdivideStoh(INT nodeId);
+	//void subdivideStoh(INT nodeId);
 	void subdivideStohQueue(INT rootId);
-	void subdivideStohIntel(INT rootId);
+	//void subdivideStohIntel(INT rootId);
 	void subdivideStohIntelQueue(INT rootId);
 	void subdivideStoh2(INT nodeId);
 	void updateNodeBoundsStoh(INT nodeIdx);
