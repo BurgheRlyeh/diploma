@@ -323,64 +323,64 @@ int nearChildPsr(int nodeId, Ray ray) {
 int siblingPsr(int nodeId, Ray ray)
 {
     int parent = nodes[nodeId].leftCntPar.z;
-    //int sib = nodeId + 1;
-    //if (nodes[parent].leftCntPar.x + nodes[parent].leftCntPar.w == sib)
+    int sib = nodeId + 1;
+    if (nodes[parent].leftCntPar.x + nodes[parent].leftCntPar.w == sib)
+        return -1;
+    return sib;
+    
+    //float prevT = rayIntersectsAABB(ray, nodes[nodeId].bb);
+    //if (abs(prevT - whnf.w) < 1e-6f)
     //    return -1;
-    //return sib;
     
-    float prevT = rayIntersectsAABB(ray, nodes[nodeId].bb);
-    if (abs(prevT - whnf.w) < 1e-6f)
-        return -1;
+    //int worseChild = -1;
+    //float worseT = whnf.w;
     
-    int worseChild = -1;
-    float worseT = whnf.w;
+    //int worstChild = -1;
+    //float worstT = whnf.z;
     
-    int worstChild = -1;
-    float worstT = whnf.z;
+    //bool nextEq = false;
     
-    bool nextEq = false;
-    
-    for (int i = 0; i < nodes[parent].leftCntPar.w; ++i)
-    {
-        int child = nodes[parent].leftCntPar.x + i;
-        float t = rayIntersectsAABB(ray, nodes[child].bb);
+    //for (int i = 0; i < nodes[parent].leftCntPar.w; ++i)
+    //{
+    //    int child = nodes[parent].leftCntPar.x + i;
+    //    float t = rayIntersectsAABB(ray, nodes[child].bb);
         
-        if (t > worstT + 1e-6f)
-        {
-            worstChild = child;
-            worstT = t;
-        }
+    //    if (t > worstT + 1e-6f)
+    //    {
+    //        worstChild = child;
+    //        worstT = t;
+    //    }
         
-        if (nodeId == child)
-            continue;
+    //    if (nodeId == child)
+    //        continue;
         
-        // prevT < t
-        if (prevT + 1e-6f < t)
-        {
-            // t < worseT -> upd worseT
-            if (t + 1e-6f < worseT)
-            {
-                worseChild = child;
-                worseT = t;
-            }
-        }
-        else if (t + 1e-6f < prevT)
-        {
+    //    // prevT < t
+    //    if (prevT + 1e-6f < t)
+    //    {
+    //        // t < worseT -> upd worseT
+    //        if (t + 1e-6f < worseT)
+    //        {
+    //            worseChild = child;
+    //            worseT = t;
+    //        }
+    //    }
+    //    else if (t + 1e-6f < prevT)
+    //    {
             
-        }
-        // if equal
-        else if (abs(prevT - t) < 1e-6f && !nextEq)
-        {
-            worseChild = child;
-            //worseT = t;
-            //nextEq = true;
-        }
-    }
+    //    }
+    //    // if equal
+    //    else if (abs(prevT - t) < 1e-6f && !nextEq)
+    //    {
+    //        worseChild = child;
+    //        //worseT = t;
+    //        //nextEq = true;
+    //    }
+    //}
     
-    if (nodeId == worstChild || abs(prevT - worstT) < 1e-6f)
-        return -1;
+    //if (nodeId == worstChild || abs(prevT - worstT) < 1e-6f)
+    //    return -1;
     
-    return worseChild;
+    //return worseChild;
 }
 
 Intsec bvhStacklessIntersectionPsr(Ray ray)

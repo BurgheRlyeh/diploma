@@ -57,6 +57,7 @@ class BVH {
 	bool m_aabbHighlightChildren{};
 
 	bool m_aabbHighlightPrims{};
+	bool m_aabbHighlightAllPrims{};
 
 	bool m_highlightFramePrims{};
 	int m_highlightPrim{};
