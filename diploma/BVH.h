@@ -145,6 +145,8 @@ private:
 	// 3 - upd prims cnt & aabb
 	int m_algInsertConds{};
 
+	bool m_toQBVH{ true };
+
 	// 0 - no prims splitting
 	// 1 - subset splitting before clustering
 	// 2 - prev clamp hist interval (naive)
@@ -185,6 +187,7 @@ private:
 	void init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
 
 	void buildPsr(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix);
+	void binaryBVH2QBVH();
 	void buildStochastic();
 
 	template <typename T>

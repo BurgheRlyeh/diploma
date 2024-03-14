@@ -233,7 +233,7 @@ void BVH::updateRenderBVH() {
 		m_primMortonFrmLeaf[i].y = 0;
 	}
 
-	if (m_algBuild == 5) {
+	if (m_algBuild == 5 || m_toQBVH) {
 		if (m_aabbHighlightAll) {
 			preForEachQuad(0, [&](int nodeId) {
 				float d{ static_cast<float>(depth(nodeId)) };
@@ -672,6 +672,10 @@ void BVH::renderBVHImGui() {
 		if (isSplitSmart) m_primSplitting = 3;
 	}
 
+	if (m_algBuild != 5) {
+		ImGui::Checkbox("BVH to QBVH", &m_toQBVH);
+	}
+
 	ImGui::Text(" ");
 
 	ImGui::Text("Statistics:");
@@ -867,6 +871,9 @@ void BVH::build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelM
 	else {
 		buildStochastic();
 	}
+
+	if (m_toQBVH)
+		binaryBVH2QBVH();
 }
 
 void BVH::buildPsr(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
@@ -1086,6 +1093,75 @@ void BVH::buildPsr(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix mod
 	
 	m_nodes[0].leftCntPar.z = -2;
 	m_nodes[0] = m_nodes[0];
+}
+
+void BVH::binaryBVH2QBVH() {
+	std::vector<BVHNode> newNodes(m_nodesUsed);
+	int newNodesUsed{ 1 };
+	newNodes[0] = m_nodes[0];
+
+	std::queue<std::pair<int, int>> nodeIds{};
+	nodeIds.push({ 0, 0 });
+
+	while (!nodeIds.empty()) {
+		int oldNodeId{ nodeIds.front().first };
+		int newNodeId{ nodeIds.front().second };
+		nodeIds.pop();
+
+		BVHNode& oldNode{ m_nodes[oldNodeId] };
+		BVHNode& newNode{ newNodes[newNodeId] };
+
+		if (oldNode.leftCntPar.y) {
+			continue;
+		}
+
+		int l{ oldNode.leftCntPar.x }, r{ l + 1 };
+		if (m_nodes[l].leftCntPar.y) {
+			newNode.leftCntPar.x = newNodesUsed;
+			++newNode.leftCntPar.w;
+
+			newNodes[newNodesUsed] = m_nodes[l];
+			newNodes[newNodesUsed].leftCntPar.z = newNodeId;
+			nodeIds.push({ l, newNodesUsed++ });
+		}
+		else {
+			int ll{ m_nodes[l].leftCntPar.x }, lr{ ll + 1 };
+			newNode.leftCntPar.x = newNodesUsed;
+			newNode.leftCntPar.w += 2;
+
+			newNodes[newNodesUsed] = m_nodes[ll];
+			newNodes[newNodesUsed].leftCntPar.z = newNodeId;
+			nodeIds.push({ ll, newNodesUsed++ });
+
+			newNodes[newNodesUsed] = m_nodes[lr];
+			newNodes[newNodesUsed].leftCntPar.z = newNodeId;
+			nodeIds.push({ lr, newNodesUsed++ });
+		}
+
+		if (m_nodes[r].leftCntPar.y) {
+			++newNode.leftCntPar.w;
+
+			newNodes[newNodesUsed] = m_nodes[r];
+			newNodes[newNodesUsed].leftCntPar.z = newNodeId;
+			nodeIds.push({ r, newNodesUsed++ });
+		}
+		else {
+			int rl{ m_nodes[r].leftCntPar.x }, rr{ rl + 1 };
+			newNode.leftCntPar.w += 2;
+
+			newNodes[newNodesUsed] = m_nodes[rl];
+			newNodes[newNodesUsed].leftCntPar.z = newNodeId;
+			nodeIds.push({ rl, newNodesUsed++ });
+
+			newNodes[newNodesUsed] = m_nodes[rr];
+			newNodes[newNodesUsed].leftCntPar.z = newNodeId;
+			nodeIds.push({ rr, newNodesUsed++ });
+		}
+	}
+
+	m_nodes = newNodes;
+	m_nodesUsed = newNodesUsed;
+	m_nodes[0].leftCntPar.z = -2;
 }
 
 void BVH::buildStochastic() {
@@ -2447,35 +2523,44 @@ void BVH::subdivide(INT nodeId) {
 }
 
 float BVH::costSAH(int nodeId) {
-	/*sah*/
-	BVHNode& node{ m_nodes[nodeId] };
+	///*sah*/
+	//BVHNode& node{ m_nodes[nodeId] };
 
-	if (node.leftCntPar.y)
-		return node.leftCntPar.y;
+	//if (node.leftCntPar.y)
+	//	return node.leftCntPar.y;
 
-	if (m_algBuild != 5) {
-		int l{ node.leftCntPar.x }, r{ l + 1 };
-		return 1.f + (
-			m_nodes[l].bb.area() * costSAH(l) +
-			m_nodes[r].bb.area() * costSAH(r)
-			) / node.bb.area();
-	}
+	//if (m_algBuild != 5) {
+	//	int l{ node.leftCntPar.x }, r{ l + 1 };
+	//	return 1.f + (
+	//		m_nodes[l].bb.area() * costSAH(l) +
+	//		m_nodes[r].bb.area() * costSAH(r)
+	//		) / node.bb.area();
+	//}
 
-	float childSah{};
-	for (int i{}; i < node.leftCntPar.w; ++i) {
-		int child{ node.leftCntPar.x + i };
-		childSah += m_nodes[child].bb.area() * costSAH(child);
-	}
-	return 1.f + childSah / node.bb.area();
+	//// ERROR only root !!!
+	//float childSah{};
+	//for (int i{}; i < node.leftCntPar.w; ++i) {
+	//	int child{ node.leftCntPar.x + i };
+	//	childSah += m_nodes[child].bb.area() * costSAH(child);
+	//}
+	//return 1.f + childSah / node.bb.area();
 
 
 	/*sa2*/
-	//float cost{};
-	//postForEach(nodeId, [&](int n) {
-	//	BVHNode& node{ m_nodes[n] };
-	//	cost += node.bb.area() * std::max<int>(1, node.leftCntPar.y);
-	//});
-	//return cost / m_nodes[nodeId].bb.area();
+	double cost{};
+	if (m_algBuild != 5 && !m_toQBVH) {
+		postForEach(nodeId, [&](int n) {
+			BVHNode& node{ m_nodes[n] };
+			cost += node.bb.area() * std::max<int>(1, node.leftCntPar.y);
+		});
+	}
+	else {
+		preForEachQuad(nodeId, [&](int n) {
+			BVHNode& node{ m_nodes[n] };
+			cost += node.bb.area() * std::max<int>(1, node.leftCntPar.y);
+			});
+	}
+	return static_cast<float>(cost / m_nodes[nodeId].bb.area());
 
 	/*my*/
 	//BVHNode& root = m_nodes[0];
