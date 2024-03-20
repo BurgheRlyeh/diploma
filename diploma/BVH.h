@@ -143,7 +143,7 @@ private:
 	// 1 - upd prims cnt
 	// 2 - upd aabb
 	// 3 - upd prims cnt & aabb
-	int m_algInsertConds{};
+	int m_algInsertConds{ 3 };
 
 	bool m_toQBVH{ true };
 
@@ -151,7 +151,7 @@ private:
 	// 1 - subset splitting before clustering
 	// 2 - prev clamp hist interval (naive)
 	// 3 - clamped w/o uniform (smart)
-	int m_primSplitting{ 3 };
+	int m_primSplitting{};
 
 	float m_primWeightMin{};
 	float m_primWeightMax{};
@@ -298,11 +298,12 @@ private:
 	void subdivideStoh2(INT nodeId);
 	void updateNodeBoundsStoh(INT nodeIdx);
 	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
+	float splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
 
 	// sah, binned & other
 	void updateDepths(INT id);
 
-	float comp(Vector4 v, INT idx);
+	float& comp(Vector4& v, INT idx);
 
 	void updateNodeBounds(INT nodeIdx);
 
