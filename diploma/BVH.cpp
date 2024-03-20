@@ -231,7 +231,7 @@ void BVH::updateRenderBVH() {
 	m_modelBuffers.clear();
 
 	for (int i{}; i < m_primsCnt; ++i) {
-		m_primMortonFrmLeaf[i].y = 0;
+		m_primRefs[i].isAABBHighlight = 0;
 	}
 
 	if (m_algBuild == 5 || m_toQBVH) {
@@ -270,8 +270,8 @@ void BVH::updateRenderBVH() {
 
 				if (m_aabbHighlightPrims && m_nodes[nodeId].leftCntPar.y) {
 					for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
-						UINT index{ m_primMortonFrmLeaf[m_nodes[nodeId].leftCntPar.x + i].x };
-						m_primMortonFrmLeaf[index].y = 1;
+						UINT index{ m_primRefs[m_nodes[nodeId].leftCntPar.x + i].primId };
+						m_primRefs[index].isAABBHighlight = 1;
 					}
 				}
 				});
@@ -298,16 +298,16 @@ void BVH::updateRenderBVH() {
 			if (m_aabbHighlightAllPrims) {
 				preForEachQuad(nodeId, [&](int n) {
 					for (int i{}; i < m_nodes[n].leftCntPar.y; ++i) {
-						UINT index{ m_primMortonFrmLeaf[m_nodes[n].leftCntPar.x + i].x };
-						m_primMortonFrmLeaf[index].y = 1;
+						UINT index{ m_primRefs[m_nodes[n].leftCntPar.x + i].primId };
+						m_primRefs[index].isAABBHighlight = 1;
 					}
 				});
 			}
 
 			if (m_aabbHighlightPrims && m_nodes[nodeId].leftCntPar.y) {
 				for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
-					UINT index{ m_primMortonFrmLeaf[m_nodes[nodeId].leftCntPar.x + i].x };
-					m_primMortonFrmLeaf[index].y = 1;
+					UINT index{ m_primRefs[m_nodes[nodeId].leftCntPar.x + i].primId };
+					m_primRefs[index].isAABBHighlight = 1;
 				}
 			}
 
@@ -340,8 +340,8 @@ void BVH::updateRenderBVH() {
 
 					if (m_aabbHighlightPrims && m_nodes[sibling].leftCntPar.y) {
 						for (int i{}; i < m_nodes[sibling].leftCntPar.y; ++i) {
-							UINT index{ m_primMortonFrmLeaf[m_nodes[sibling].leftCntPar.x + i].x };
-							m_primMortonFrmLeaf[index].y = 1;
+							UINT index{ m_primRefs[m_nodes[sibling].leftCntPar.x + i].primId };
+							m_primRefs[index].isAABBHighlight = 1;
 						}
 					}
 				}
@@ -363,8 +363,8 @@ void BVH::updateRenderBVH() {
 
 					if (m_aabbHighlightPrims && m_nodes[child].leftCntPar.y) {
 						for (int i{}; i < m_nodes[child].leftCntPar.y; ++i) {
-							UINT index{ m_primMortonFrmLeaf[m_nodes[child].leftCntPar.x + i].x };
-							m_primMortonFrmLeaf[index].y = 1;
+							UINT index{ m_primRefs[m_nodes[child].leftCntPar.x + i].primId };
+							m_primRefs[index].isAABBHighlight = 1;
 						}
 					}
 				}
@@ -410,8 +410,8 @@ void BVH::updateRenderBVH() {
 
 				if (m_aabbHighlightPrims && m_nodes[nodeId].leftCntPar.y) {
 					for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
-						UINT index{ m_primMortonFrmLeaf[m_nodes[nodeId].leftCntPar.x + i].x };
-						m_primMortonFrmLeaf[index].y = 1;
+						UINT index{ m_primRefs[m_nodes[nodeId].leftCntPar.x + i].primId };
+						m_primRefs[index].isAABBHighlight = 1;
 					}
 				}
 				});
@@ -440,16 +440,16 @@ void BVH::updateRenderBVH() {
 			if (m_aabbHighlightAllPrims) {
 				preForEach(nodeId, [&](int n) {
 					for (int i{}; i < m_nodes[n].leftCntPar.y; ++i) {
-						UINT index{ m_primMortonFrmLeaf[m_nodes[n].leftCntPar.x + i].x };
-						m_primMortonFrmLeaf[index].y = 1;
+						UINT index{ m_primRefs[m_nodes[n].leftCntPar.x + i].primId };
+						m_primRefs[index].isAABBHighlight = 1;
 					}
 				});
 			}
 
 			if (m_aabbHighlightPrims && m_nodes[nodeId].leftCntPar.y) {
 				for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
-					UINT index{ m_primMortonFrmLeaf[m_nodes[nodeId].leftCntPar.x + i].x };
-					m_primMortonFrmLeaf[index].y = 1;
+					UINT index{ m_primRefs[m_nodes[nodeId].leftCntPar.x + i].primId };
+					m_primRefs[index].isAABBHighlight = 1;
 				}
 			}
 
@@ -480,8 +480,8 @@ void BVH::updateRenderBVH() {
 
 				if (m_aabbHighlightPrims && m_nodes[sibling].leftCntPar.y) {
 					for (int i{}; i < m_nodes[sibling].leftCntPar.y; ++i) {
-						UINT index{ m_primMortonFrmLeaf[m_nodes[sibling].leftCntPar.x + i].x };
-						m_primMortonFrmLeaf[index].y = 1;
+						UINT index{ m_primRefs[m_nodes[sibling].leftCntPar.x + i].primId };
+						m_primRefs[index].isAABBHighlight = 1;
 					}
 				}
 			}
@@ -501,8 +501,8 @@ void BVH::updateRenderBVH() {
 
 					if (m_aabbHighlightPrims && m_nodes[child].leftCntPar.y) {
 						for (int i{}; i < m_nodes[child].leftCntPar.y; ++i) {
-							UINT index{ m_primMortonFrmLeaf[m_nodes[child].leftCntPar.x + i].x };
-							m_primMortonFrmLeaf[index].y = 1;
+							UINT index{ m_primRefs[m_nodes[child].leftCntPar.x + i].primId };
+							m_primRefs[index].isAABBHighlight = 1;
 						}
 					}
 				}
@@ -529,7 +529,7 @@ void BVH::updateBuffers() {
 
 	subres = {};
 	THROW_IF_FAILED(m_pDeviceContext->Map(m_pPrimIdsBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subres));
-	memcpy(subres.pData, m_primMortonFrmLeaf.data(), sizeof(XMINT4) * m_primsCnt);
+	memcpy(subres.pData, m_primRefs.data(), sizeof(XMINT4) * m_primsCnt);
 	m_pDeviceContext->Unmap(m_pPrimIdsBuffer, 0);
 }
 
@@ -608,33 +608,17 @@ void BVH::renderBVHImGui() {
 		ImGui::Checkbox("Morton", &isInsertMorton);
 		if (isInsertMorton) m_algInsert = 1;
 
-		bool isInsertBVHPrims{ m_algInsert == 2 };
-		ImGui::Checkbox("BVH prims", &isInsertBVHPrims);
-		if (isInsertBVHPrims) m_algInsert = 2;
-
-		bool isInsertBVHPrimsPlus{ m_algInsert == 3 };
-		ImGui::Checkbox("BVH prims+", &isInsertBVHPrimsPlus);
-		if (isInsertBVHPrimsPlus) m_algInsert = 3;
-
-		bool isInsertBVHTree{ m_algInsert == 4 };
-		ImGui::Checkbox("BVH tree", &isInsertBVHTree);
-		if (isInsertBVHTree) m_algInsert = 4;
-
-		bool isInsertBVHNodes{ m_algInsert == 5 };
-		ImGui::Checkbox("BVH nodes", &isInsertBVHNodes);
-		if (isInsertBVHNodes) m_algInsert = 5;
-
-		bool isInsertSmartBVH{ m_algInsert == 6 };
-		ImGui::Checkbox("Smart BVH", &isInsertSmartBVH);
-		if (isInsertSmartBVH) m_algInsert = 6;
-
-		if (m_algInsert && m_algInsert != 6) {
+		if (m_algInsert == 1) {
 			ImGui::DragInt(
 				"Insert search window",
 				&m_insertSearchWindow, 1, 0,
 				static_cast<int>(std::round(m_primsCnt * m_frmPart))
 			);
 		}
+
+		bool isInsertSmartBVH{ m_algInsert == 2 };
+		ImGui::Checkbox("Smart BVH", &isInsertSmartBVH);
+		if (isInsertSmartBVH) m_algInsert = 2;
 
 		ImGui::Text("Insertion prims algorithm conditions:");
 
@@ -774,7 +758,7 @@ void BVH::renderAABBsImGui() {
 			int cnt{ m_nodes[m_aabbHighlightNode].leftCntPar.y };
 			for (int i{ first }; i < first + cnt; ++i) {
 				ImGui::SameLine();
-				ImGui::Text("%i", m_primMortonFrmLeaf[i].x);
+				ImGui::Text("%i", m_primRefs[i].primId);
 				if (i + 1 < m_nodes[m_aabbHighlightNode].leftCntPar.y) {
 					ImGui::SameLine();
 					ImGui::Text(", ");
@@ -831,8 +815,8 @@ void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMa
 	m_depthMax = -1;
 
 	m_prims.resize(m_primsCnt);
-	m_primMortonFrmLeaf.clear();
-	m_primMortonFrmLeaf.resize(m_primsCnt);
+	m_primRefs.clear();
+	m_primRefs.resize(m_primsCnt);
 	m_nodes.resize(2 * m_primsCnt - 1);
 
 	for (UINT i{}; i < m_primsCnt; ++i) {
@@ -846,7 +830,7 @@ void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMa
 		m_aabbAllCtrs.grow(m_prims[i].ctr);
 		m_aabbAllPrims.grow(m_prims[i].bb);
 
-		m_primMortonFrmLeaf[i] = { i, 0, 0, 0 };
+		m_primRefs[i] = { i, 0, 0, 0 };
 	}
 }
 
@@ -861,13 +845,13 @@ void BVH::build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelM
 		m_nodes[0].leftCntPar = {
 			0, m_primsCnt, -1, 0
 		};
-		if (m_algBuild == 3) {
-			subdivideStohIntelQueue(0);
-		}
-		else {
+		//if (m_algBuild == 3) {
+		//	subdivideStohIntelQueue(0);
+		//}
+		//else {
 			updateNodeBounds(0);
 			subdivide(0);
-		}
+		//}
 	}
 	else {
 		//float frmPartBest{}, uniformBest{};
@@ -1018,8 +1002,8 @@ void BVH::buildPsr(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix mod
 
 	//m_prims.resize(m_primsCnt); ?
 
-	m_primMortonFrmLeaf.clear();
-	m_primMortonFrmLeaf.resize(completeBvhStatistics.m_primReferenceCount);
+	m_primRefs.clear();
+	m_primRefs.resize(completeBvhStatistics.m_primReferenceCount);
 
 	m_nodes.clear();
 	m_nodes.resize(1 + completeBvhStatistics.m_internalNodeCount + completeBvhStatistics.m_leafNodeCount);
@@ -1086,7 +1070,7 @@ void BVH::buildPsr(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix mod
 				sce::Psr::BottomLevelBvhPrim prim{};
 				do {
 					prim = bottomLevelBvhView.m_prim[childId + leaf.leftCntPar.y++];
-					m_primMortonFrmLeaf[m_primsCnt++].x = prim.getOriginIndex();
+					m_primRefs[m_primsCnt++].primId = prim.getOriginIndex();
 				} while (!prim.isLastPrim());
 
 				++node.leftCntPar.w;
@@ -1195,18 +1179,18 @@ void BVH::binaryBVH2QBVH() {
 }
 
 void BVH::buildStochastic() {
-	auto it = m_primMortonFrmLeaf.begin();
+	auto it = m_primRefs.begin();
 	// compute morton indices of primitives
 	for (int i{}; i < m_primsCnt; ++i) {
-		(*it++).y = encodeMorton((1 << 10) * m_aabbAllCtrs.relateVecPos(m_prims[i].ctr));
+		(*it++).mortonCode = encodeMorton((1 << 10) * m_aabbAllCtrs.relateVecPos(m_prims[i].ctr));
 	}
 
 	// sort primitives
 	std::sort(
-		m_primMortonFrmLeaf.begin(),
-		m_primMortonFrmLeaf.end(),
-		[&](const XMUINT4& p1, const XMUINT4& p2) {
-			return p1.y < p2.y;
+		m_primRefs.begin(),
+		m_primRefs.end(),
+		[&](const PrimRef& p1, const PrimRef& p2) {
+			return p1.mortonCode < p2.mortonCode;
 		}
 	);
 
@@ -1220,9 +1204,9 @@ void BVH::buildStochastic() {
 	std::vector<int> bin_cnts(m_clampBinCnt);
 
 	// cdf init and weight clamping histogram building (alg 1)
-	it = m_primMortonFrmLeaf.begin();
+	it = m_primRefs.begin();
 	for (int i{}; i < m_primsCnt; ++i) {
-		sum += (cdf[i] = m_prims[(*(it++)).x].bb.area());
+		sum += (cdf[i] = m_prims[(*(it++)).primId].bb.area());
 		wmin = std::min<float>(wmin, cdf[i]);
 		wmax = std::max<float>(wmax, cdf[i]);
 
@@ -1238,25 +1222,36 @@ void BVH::buildStochastic() {
 	m_primWeightMin = wmin;
 	m_primWeightMax = wmax;
 
-	if (!m_primSplitting || m_primSplitting == 1) {
+	std::vector<bool> isSplit(m_primsCnt);
+	m_splitCnt = 0;
+
+	{
 		// primitive probability, compensate uniformity
-		float s{ 1.f / (m_primsCnt * m_frmPart) };
-		s = (s - m_uniform / m_primsCnt) / std::max<float>(1.f - m_uniform, std::numeric_limits<float>::epsilon());
+		float s0{ 1.f / (m_primsCnt * m_frmPart) };
+		float s{
+			(s0 - m_uniform / m_primsCnt) / std::max<float>(1.f - m_uniform, std::numeric_limits<float>::epsilon())
+		};
 
 		// unclamped & clamped sums, clamp
 		float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
-		float clamp{ std::numeric_limits<float>::max() };
+		float clamp0{ std::numeric_limits<float>::max() }, clamp{ clamp0 };
+		bool isClampFind{};
 
 		// selection of clamp
 		for (int i{}; i < m_clampBinCnt - 1; ++i) {
 			float c{ powf(m_clampBase, i - m_clampOffset + 1) };
-			float val{ c / (uSum + c * cSum) };
+			if (m_primSplitting == 3 && !isClampFind && c / (uSum + c * cSum) >= s0) {
+				clamp0 = c;
+				isClampFind = true;
+			}
 			if (c / (uSum + c * cSum) >= s) {
 				clamp = c;
 				break;
 			}
 			uSum += c * bin_cnts[i];
 			cSum -= bin_cnts[i];
+			if (m_primSplitting == 2)
+				clamp0 = c;
 		}
 		m_clamp = clamp;
 
@@ -1267,59 +1262,15 @@ void BVH::buildStochastic() {
 			for (int i{}; i < m_primsCnt; ++i) {
 				if (clamp < cdf[i]) {
 					cdf[i] = clamp;
-					if (m_primSplitting) m_primMortonFrmLeaf[i].w = 1;
 					++m_clampedCnt;
+					if (m_primSplitting == 1) {
+						isSplit[m_primRefs[i].primId] = true;
+						++m_splitCnt;
+					}
 				}
-				sum += cdf[i];
-			}
-		}
-		else {
-			m_clamp = -1.f;
-		}
-	}
-	else {
-		// primitive probability, compensate uniformity
-		float s{ 1.f / (m_primsCnt * m_frmPart) };
-		float su{
-			(s - m_uniform / m_primsCnt) / std::max<float>(1.f - m_uniform, std::numeric_limits<float>::epsilon())
-		};
-
-		// unclamped & clamped sums, clamp
-		float uSum{}, cSum{ static_cast<float>(m_primsCnt) };
-		float clamp{ std::numeric_limits<float>::max() };
-		bool clampFind{};
-		float clampu{ std::numeric_limits<float>::max() };
-
-		// selection of clamp
-		for (int i{}; i < m_clampBinCnt - 1; ++i) {
-			float c{ powf(m_clampBase, i - m_clampOffset + 1) };
-			float val{ c / (uSum + c * cSum) };
-			if (m_primSplitting == 3 && !clampFind && c / (uSum + c * cSum) >= s) {
-				clamp = c;
-				clampFind = true;
-			}
-			if (c / (uSum + c * cSum) >= su) {
-				clampu = c;
-				break;
-			}
-			uSum += c * bin_cnts[i];
-			cSum -= bin_cnts[i];
-			if (m_primSplitting == 2)
-				clamp = c;
-		}
-		m_clamp = clampu;
-
-		// reweighting if found
-		m_clampedCnt = 0;
-		if (clampu != std::numeric_limits<float>::max()) {
-			sum = 0.f;
-			for (int i{}; i < m_primsCnt; ++i) {
-				if (clampu < cdf[i]) {
-					cdf[i] = clampu;
-					++m_clampedCnt;
-				}
-				else if (clamp < cdf[i]) {
-					m_primMortonFrmLeaf[i].w = 1;
+				else if (m_primSplitting > 1 && clamp0 < cdf[i]) {
+					isSplit[m_primRefs[i].primId] = true;
+					++m_splitCnt;
 				}
 				sum += cdf[i];
 			}
@@ -1337,23 +1288,16 @@ void BVH::buildStochastic() {
 	sum = cdf[m_primsCnt - 1];
 
 	// selecting for carcass
-	m_splitCnt = 0;
 	int frmSize{}, frmExpSize{ static_cast<int>(std::round(m_primsCnt * m_frmPart)) };
-	m_frame.clear();
-	m_frame.resize(frmExpSize);
 	float prob{ 1.f * (1.f * frmSize) / frmExpSize };
-	it = m_edge = m_primMortonFrmLeaf.begin();
+	it = m_edge = m_primRefs.begin();
 	for (int i{}; i < m_primsCnt; ++i) {
-		m_splitCnt += (*it).w;
-
 		if (frmSize == frmExpSize || cdf[i] <= prob * sum) {
-			(*(it++)).z = frmSize - 1;
+			(*(it++)).subsetNearest = frmSize - 1;
 			continue;
 		}
 
-		m_frame[frmSize] = *it;
-
-		(*it).z = frmSize++;
+		(*it).subsetNearest = frmSize++;
 		prob = 1.f * frmSize / frmExpSize;
 
 		std::swap(*it++, *m_edge++);
@@ -1363,43 +1307,35 @@ void BVH::buildStochastic() {
 	BVHNode& root = m_nodes[0];
 	root.leftCntPar = { 0, frmSize, -1, 0 };
 	updateNodeBoundsStoh(0);
-	subdivideStohQueue(0);
+	subdivideStohQueue(0, true);
 
 	for (int i{}; i < frmSize - 1; ++i) {
-		m_primMortonFrmLeaf[i].y = i + 1;
+		m_primRefs[i].next = i + 1;
 	}
-	m_primMortonFrmLeaf[frmSize - 1].y = m_primsCnt;
+	m_primRefs[frmSize - 1].next = m_primsCnt;
 
 	m_frmSize = frmSize;
 	for (int i{ m_frmSize }; i < m_primsCnt; ++i) {
 		int leaf{};
 		if (m_algInsert == 1)
-			leaf = findBestLeafMorton((*m_edge).x, (*m_edge).z);
+			leaf = findBestLeafMorton((*m_edge).primId, (*m_edge).subsetNearest);
 		else if (m_algInsert == 2)
-			leaf = findBestLeafBVHPrims((*m_edge).x, (*m_edge).z);
-		else if (m_algInsert == 3)
-			leaf = findBestLeafBVHPrimsPlus((*m_edge).x, (*m_edge).z);
-		else if (m_algInsert == 4)
-			leaf = findBestLeafBVHTree((*m_edge).x, (*m_edge).z);
-		else if (m_algInsert == 5)
-			leaf = findBestLeafBVHNodes((*m_edge).x, (*m_edge).z);
-		else if (m_algInsert == 6)
-			leaf = findBestLeafSmartBVH((*m_edge).x, (*m_edge).z);
+			leaf = findBestLeafSmartBVH((*m_edge).primId, (*m_edge).subsetNearest);
 		else
-			leaf = findBestLeafBruteforce((*m_edge).x);
+			leaf = findBestLeafBruteforce((*m_edge).primId);
 		
 		++m_nodes[leaf].leftCntPar.w;
 		if (m_algInsertConds == 2 || m_algInsertConds == 3)
-			m_nodes[leaf].bb.grow(m_prims[(*m_edge).x].bb);
+			m_nodes[leaf].bb.grow(m_prims[(*m_edge).primId].bb);
 
-		XMUINT4& frmPrim{ m_primMortonFrmLeaf[m_nodes[leaf].leftCntPar.x] };
-		m_primMortonFrmLeaf[i].y = frmPrim.y;
-		frmPrim.y = i;
+		PrimRef& frmPrim{ m_primRefs[m_nodes[leaf].leftCntPar.x] };
+		m_primRefs[i].next = frmPrim.next;
+		frmPrim.next = i;
 
 		++m_edge;
 	}
 
-	std::vector<XMUINT4> temp;
+	std::vector<PrimRef> temp;
 	if (!m_primSplitting)
 		temp.resize(m_primsCnt);
 	else {
@@ -1407,36 +1343,37 @@ void BVH::buildStochastic() {
 		m_prims.resize(2 * m_primsCnt - 1);
 	}
 
-	for (int i{}, j{}; j < m_primsCntOrig; ++i, j = m_primMortonFrmLeaf[j].y) {
-		if (!m_primSplitting || !m_primMortonFrmLeaf[j].w) {
-			temp[i] = m_primMortonFrmLeaf[j];
+	for (int i{}, j{}; j < m_primsCntOrig; ++i, j = m_primRefs[j].next) {
+		if (!m_primSplitting || !isSplit[m_primRefs[j].primId]) {
+			temp[i] = m_primRefs[j];
 			continue;
 		}
+		isSplit[m_primRefs[j].primId] = false;
 
-		Primitive& p{ m_prims[m_primMortonFrmLeaf[j].x] };
-		m_nodes[m_frame[m_primMortonFrmLeaf[j].z].w].leftCntPar.w += 3;
+		Primitive& p{ m_prims[m_primRefs[j].primId] };
+		m_nodes[m_primRefs[m_primRefs[j].subsetNearest].leafId].leftCntPar.w += 3;
 
 		Primitive p0{ .v0{ p.v0 }, .v1{ (p.v0 + p.v1) / 2.f }, .v2{ (p.v0 + p.v2) / 2.f } };
 		p0.updCtrAndBB();
 		m_prims[m_primsCnt] = p0;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
 
 		Primitive p1{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ p.v1 }, .v2{ (p.v1 + p.v2) / 2.f } };
 		p1.updCtrAndBB();
 		m_prims[m_primsCnt] = p1;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
 
 		Primitive p2{ .v0{ (p.v0 + p.v2) / 2.f }, .v1{ (p.v1 + p.v2) / 2.f }, .v2{ p.v2 } };
 		p2.updCtrAndBB();
 		m_prims[m_primsCnt] = p2;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
 
 		Primitive p3{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ (p.v0 + p.v2) / 2.f }, .v2{ (p.v1 + p.v2) / 2.f } };
 		p3.updCtrAndBB();
 		m_prims[m_primsCnt] = p3;
-		temp[i] = { static_cast<UINT>(m_primsCnt++), m_primMortonFrmLeaf[j].x, 0, 0 };
+		temp[i] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
 	}
-	m_primMortonFrmLeaf = temp;
+	m_primRefs = temp;
 
 	m_leafsCnt = 0;
 	int firstOffset{};
@@ -1454,16 +1391,16 @@ void BVH::buildStochastic() {
 		firstOffset += m_nodes[nodeId].leftCntPar.w;
 
 		updateNodeBoundsStoh(nodeId);
-		subdivideStohQueue(nodeId);
+		subdivideStohQueue(nodeId, false);
 	});
 
 	if (m_primSplitting) {
 		for (int i{}; i < m_primsCnt; ++i) {
-			bool isSplitted{ m_primMortonFrmLeaf[i].x >= m_primsCntOrig };
+			bool isSplitted{ m_primRefs[i].primId >= m_primsCntOrig };
 			if (isSplitted) {
-				unsigned int primId{ m_primMortonFrmLeaf[i].y };
-				m_primMortonFrmLeaf[i].x = primId;
-				m_primMortonFrmLeaf[primId].w = 1;
+				unsigned int primId{ m_primRefs[i].primOrig };
+				m_primRefs[i].primId = primId;
+				m_primRefs[primId].leafId = 1;
 			}
 		}
 	}
@@ -1511,7 +1448,7 @@ int BVH::findBestLeafBruteforce(int primId) {
 }
 
 int BVH::findBestLeafMorton(int primId, int frmNearest) {
-	unsigned int best{ m_frame[frmNearest].w };
+	unsigned int best{ m_primRefs[frmNearest].leafId };
 	float mincost{ primInsertMetric(primId, best) };
 
 	// morton window
@@ -1519,127 +1456,18 @@ int BVH::findBestLeafMorton(int primId, int frmNearest) {
 	auto e = std::min<int>(m_frmSize, frmNearest + m_insertSearchWindow) - 1;
 	for (int i{ frmNearest - 1 }, j{ frmNearest + 1 }; b <= i || j <= e; --i, ++j) {
 		if (b <= i) {
-			float cost = primInsertMetric(primId, m_frame[i].w);
+			float cost = primInsertMetric(primId, m_primRefs[i].leafId);
 			if (cost < mincost) {
 				mincost = cost;
-				best = m_frame[i].w;
+				best = m_primRefs[i].leafId;
 			}
 		}
 		if (j <= e) {
-			float cost = primInsertMetric(primId, m_frame[j].w);
+			float cost = primInsertMetric(primId, m_primRefs[j].leafId);
 			if (cost < mincost) {
 				mincost = cost;
-				best = m_frame[j].w;
+				best = m_primRefs[j].leafId;
 			}
-		}
-	}
-
-	return best;
-}
-
-int BVH::findBestLeafBVHPrims(int primId, int frmNearest) {
-	float mincost = std::numeric_limits<float>::max();
-	int best{ -1 };
-
-	// morton window
-	auto b = std::max<int>(m_frame[frmNearest].z - m_insertSearchWindow, 0);
-	auto e = std::min<int>(m_frmSize, m_frame[frmNearest].z + m_insertSearchWindow);
-	for (int i{ b }; i < e; ++i) {
-		float currmin = primInsertMetric(primId, m_frame[m_primMortonFrmLeaf[i].z].w);
-		if (currmin < mincost) {
-			mincost = currmin;
-			best = m_frame[m_primMortonFrmLeaf[i].z].w;
-		}
-	}
-
-	return best != -1 ? best : m_frame[frmNearest].w;
-}
-
-int BVH::findBestLeafBVHPrimsPlus(int primId, int frmNearest) {
-	int best{ static_cast<int>(m_frame[frmNearest].w) };
-	float mincost{ primInsertMetric(primId, best) };
-
-	int id{ static_cast<int>(m_frame[frmNearest].z - 1) };
-	for (int cnt{}; cnt < m_insertSearchWindow && id != -1; ++cnt) {
-		int node{ static_cast<int>(m_frame[m_primMortonFrmLeaf[id--].z].w) };
-		float cost{ primInsertMetric(primId, node) };
-		if (cost < mincost) {
-			mincost = cost;
-			best = node;
-		}
-
-		while (id != -1 && m_primMortonFrmLeaf[id--].w == node);
-	}
-
-	id = m_frame[frmNearest].z + 1;
-	for (int cnt{}; cnt < m_insertSearchWindow && id < m_frmSize; ++cnt) {
-		int node{ static_cast<int>(m_frame[m_primMortonFrmLeaf[id++].z].w) };
-		float cost{ primInsertMetric(primId, node) };
-		if (cost < mincost) {
-			mincost = cost;
-			best = node;
-		}
-
-		while (id < m_frmSize && m_frame[m_primMortonFrmLeaf[id++].z].w == node);
-	}
-
-	return best;
-}
-
-int BVH::findBestLeafBVHTree(int primId, int frmNearest) {
-	int leaf{ static_cast<int>(m_frame[frmNearest].w) }, best{ leaf };
-	float mincost{ primInsertMetric(primId, leaf) };
-
-	for (int i{}; i < m_insertSearchWindow; ++i) {
-		leaf = leftLeaf(leaf);
-		if (leaf == -1) break;
-
-		float cost{ primInsertMetric(primId, leaf) };
-		if (cost < mincost) {
-			mincost = cost;
-			best = leaf;
-		}
-	}
-
-	leaf = m_frame[frmNearest].w;
-	for (int i{}; i < m_insertSearchWindow; ++i) {
-		leaf = rightLeaf(leaf);
-		if (leaf == -1) break;
-
-		float cost{ primInsertMetric(primId, leaf) };
-		if (cost < mincost) {
-			mincost = cost;
-			best = leaf;
-		}
-	}
-
-	return best;
-}
-
-int BVH::findBestLeafBVHNodes(int primId, int frmNearest) {
-	int best{ static_cast<int>(m_frame[frmNearest].w) }, leaf{ best };
-	float mincost{ primInsertMetric(primId, best) };
-
-	for (int i{}; i < m_insertSearchWindow; ++i) {
-		for (--leaf; leaf && !m_nodes[leaf].leftCntPar.y; --leaf);
-		if (!leaf) break;
-
-		float cost{ primInsertMetric(primId, leaf) };
-		if (cost < mincost) {
-			mincost = cost;
-			best = leaf;
-		}
-	}
-
-	leaf = m_frame[frmNearest].w;
-	for (int i{}; i < m_insertSearchWindow; ++i) {
-		for (++leaf; leaf < m_nodesUsed && !m_nodes[leaf].leftCntPar.y; ++leaf);
-		if (leaf == m_nodesUsed) break;
-
-		float cost{ primInsertMetric(primId, leaf) };
-		if (cost < mincost) {
-			mincost = cost;
-			best = leaf;
 		}
 	}
 
@@ -1649,9 +1477,9 @@ int BVH::findBestLeafBVHNodes(int primId, int frmNearest) {
 int BVH::findBestLeafSmartBVH(int primId, int frmNearest) {
 	Primitive prim = m_prims[primId];
 
-	int bestLeaf{ static_cast<int>(m_frame[frmNearest].w) };
+	int bestLeaf{ static_cast<int>(m_primRefs[frmNearest].leafId) };
 	//float bestCost{ std::numeric_limits<float>::max() };
-	float bestCost{ primInsertMetric(primId, m_frame[frmNearest].w) };
+	float bestCost{ primInsertMetric(primId, m_primRefs[frmNearest].leafId) };
 
 	//std::queue<std::pair<int, float>> nodes{};
 	auto cmp = [](const std::pair<int, float>& a, const std::pair<int, float>& b) {
@@ -1702,160 +1530,6 @@ int BVH::findBestLeafSmartBVH(int primId, int frmNearest) {
 	return bestLeaf;
 }
 
-//void BVH::subdivideStohIntel(int nodeId) {
-//	BVHNode& node{ m_nodes[nodeId] };
-//	updateNodeBounds(nodeId);
-//
-//	int nPrims{ node.leftCntPar.y };
-//	if (nPrims <= 2) {
-//		// init leaf
-//		auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
-//		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-//			//(*it).w = nodeId;
-//			m_frame[(*it).z].z = i;
-//			m_frame[(*it).z].w = nodeId;
-//		}
-//
-//		++m_leafsCnt;
-//		updateDepths(nodeId);
-//		return;
-//	}
-//
-//	AABB bbCtrs{};
-//	for (int i{}; i < node.leftCntPar.y; ++i) {
-//		bbCtrs.grow(m_prims[m_primMortonFrmLeaf[node.leftCntPar.x + i].x].ctr);
-//	}
-//
-//	int dim{ bbCtrs.extentMax() };
-//
-//	int mid{ (node.leftCntPar.x + node.leftCntPar.y) / 2 };
-//	if (comp(bbCtrs.bmin, dim) == comp(bbCtrs.bmax, dim)) {
-//		// init leaf
-//		auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
-//		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-//			//(*it).w = nodeId;
-//			m_frame[(*it).z].z = i;
-//			m_frame[(*it).z].w = nodeId;
-//		}
-//
-//		++m_leafsCnt;
-//		updateDepths(nodeId);
-//		return;
-//	}
-//
-//	// partition prims based on binned sah
-//	std::vector<std::vector<float>> binsCnt(3);
-//	std::vector<std::vector<AABB>> binsBBs(3);
-//	std::vector<std::vector<float>> binsCosts(3);
-//	for (int i{}; i < 3; ++i) {
-//		binsCnt[i] = std::vector<float>(m_sahSteps);
-//		binsBBs[i] = std::vector<AABB>(m_sahSteps);
-//		binsCosts[i] = std::vector<float>(m_sahSteps);
-//	}
-//
-//	std::vector<bool> skipDim(3);
-//	for (int i{}; i < 3; ++i)
-//		skipDim[i] = comp(bbCtrs.bmin, i) == comp(bbCtrs.bmax, i);
-//
-//	for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i) {
-//		Vector4 offset{ bbCtrs.relateVecPos(m_prims[m_primMortonFrmLeaf[i].x].ctr) };
-//		for (int a{}; a < 3; ++a) {
-//			if (skipDim[a]) continue;
-//			int b{ static_cast<int>(m_sahSteps * comp(offset, a)) };
-//			if (b == m_sahSteps) --b;
-//			assert(b >= 0);
-//			assert(b < m_sahSteps);
-//			++binsCnt[a][b];
-//			binsBBs[a][b] = AABB::bbUnion(binsBBs[a][b], m_prims[m_primMortonFrmLeaf[i].x].bb);
-//		}
-//	}
-//
-//	// compute costs for splitting after each bucket
-//	for (int a{}; a < 3; ++a) {
-//		if (skipDim[a]) continue;
-//		for (int i{}; i < m_sahSteps - 1; ++i) {
-//			AABB b0{}, b1{};
-//			float cnt0{}, cnt1{};
-//			for (int j{}; j <= i; ++j) {
-//				b0 = AABB::bbUnion(b0, binsBBs[a][j]);
-//				cnt0 += binsCnt[a][j];
-//			}
-//			for (int j{ i + 1 }; j < m_sahSteps; ++j) {
-//				b1 = AABB::bbUnion(b1, binsBBs[a][j]);
-//				cnt1 += binsCnt[a][j];
-//			}
-//			if (cnt0 == 0.f || cnt1 == 0.f) {
-//				binsCosts[a][i] = std::numeric_limits<float>::max();
-//				continue;
-//			}
-//			binsCosts[a][i] = 1 + (cnt0 * b0.area() + cnt1 * b1.area()) / node.bb.area();
-//		}
-//	}
-//
-//	// find bucket to split at that min SAH metric
-//	float minCost{ std::numeric_limits<float>::max() };
-//	int minCostDim{}, minCostSplitBucket{};
-//	for (int a{}; a < 3; ++a) {
-//		if (skipDim[a]) continue;
-//		for (int i{}; i < m_sahSteps - 1; ++i) {
-//			if (binsCosts[a][i] < minCost) {
-//				minCost = binsCosts[a][i];
-//				minCostDim = a;
-//				minCostSplitBucket = i;
-//			}
-//		}
-//	}
-//
-//	assert(minCost != std::numeric_limits<float>::max());
-//
-//	// either create leaf or split prims at selected
-//	float leafCost{ static_cast<float>(nPrims) };
-//	if (nPrims > 2 /*max prims per leaf*/ || minCost < leafCost) {
-//		XMUINT4* pmid = std::partition(
-//			&m_primMortonFrmLeaf[node.leftCntPar.x],
-//			&m_primMortonFrmLeaf[node.leftCntPar.x + node.leftCntPar.y - 1] + 1,
-//			[=](const XMUINT4& pi) {
-//				int b = m_sahSteps * comp(bbCtrs.relateVecPos(m_prims[pi.x].ctr), minCostDim);
-//				if (b == m_sahSteps) --b;
-//				assert(b >= 0);
-//				assert(b < m_sahSteps);
-//				return b <= minCostSplitBucket;
-//			}
-//		);
-//		mid = pmid - &m_primMortonFrmLeaf[0];
-//	}
-//	else {
-//		// init leaf
-//		auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
-//		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-//			//(*it).w = nodeId;
-//			m_frame[(*it).z].z = i;
-//			m_frame[(*it).z].w = nodeId;
-//		}
-//
-//		++m_leafsCnt;
-//		updateDepths(nodeId);
-//		return;
-//	}
-//
-//	int leftId{ m_nodesUsed++ };
-//	m_nodes[leftId].leftCntPar = {
-//		node.leftCntPar.x, mid - node.leftCntPar.x, nodeId, 0
-//	};
-//
-//	int rightId{ m_nodesUsed++ };
-//	m_nodes[rightId].leftCntPar = {
-//		mid, node.leftCntPar.x + node.leftCntPar.y - mid, nodeId, 0
-//	};
-//
-//	node.leftCntPar = {
-//		leftId, 0, node.leftCntPar.z, 0
-//	};
-//
-//	subdivideStohIntel(leftId);
-//	subdivideStohIntel(rightId);
-//}
-
 void BVH::subdivideStohIntelQueue(int rootId) {
 	std::queue<int> nodes{};
 	nodes.push(rootId);
@@ -1871,11 +1545,9 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 		// <= m_primsPerLeaf or == 1 ? TODO
 		if (nPrims <= m_primsPerLeaf) {
 			// init leaf
-			auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
 			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-				//(*it).w = nodeId;
-				m_frame[(*it).z].z = i;
-				m_frame[(*it).z].w = nodeId;
+				m_primRefs[(*it).subsetNearest].leafId = nodeId;
 			}
 
 			++m_leafsCnt;
@@ -1885,7 +1557,7 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 
 		AABB bbCtrs{};
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			bbCtrs.grow(m_prims[m_primMortonFrmLeaf[node.leftCntPar.x + i].x].ctr);
+			bbCtrs.grow(m_prims[m_primRefs[node.leftCntPar.x + i].primId].ctr);
 		}
 
 		int dim{ bbCtrs.extentMax() };
@@ -1893,11 +1565,9 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 		int mid{ (node.leftCntPar.x + node.leftCntPar.y) / 2 };
 		if (comp(bbCtrs.bmin, dim) == comp(bbCtrs.bmax, dim)) {
 			// init leaf
-			auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
 			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-				//(*it).w = nodeId;
-				m_frame[(*it).z].z = i;
-				m_frame[(*it).z].w = nodeId;
+				m_primRefs[(*it).subsetNearest].leafId = nodeId;
 			}
 
 			++m_leafsCnt;
@@ -1920,7 +1590,7 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 			skipDim[i] = comp(bbCtrs.bmin, i) == comp(bbCtrs.bmax, i);
 
 		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i) {
-			Vector4 offset{ bbCtrs.relateVecPos(m_prims[m_primMortonFrmLeaf[i].x].ctr) };
+			Vector4 offset{ bbCtrs.relateVecPos(m_prims[m_primRefs[i].primId].ctr) };
 			for (int a{}; a < 3; ++a) {
 				if (skipDim[a]) continue;
 				int b{ static_cast<int>(m_sahSteps * comp(offset, a)) };
@@ -1928,7 +1598,7 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 				assert(b >= 0);
 				assert(b < m_sahSteps);
 				++binsCnt[a][b];
-				binsBBs[a][b] = AABB::bbUnion(binsBBs[a][b], m_prims[m_primMortonFrmLeaf[i].x].bb);
+				binsBBs[a][b] = AABB::bbUnion(binsBBs[a][b], m_prims[m_primRefs[i].primId].bb);
 			}
 		}
 
@@ -1973,11 +1643,11 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 		// either create leaf or split prims at selected
 		float leafCost{ static_cast<float>(nPrims) };
 		if (nPrims > m_primsPerLeaf /*max prims per leaf*/ || minCost < leafCost) {
-			XMUINT4* pmid = std::partition(
-				&m_primMortonFrmLeaf[node.leftCntPar.x],
-				&m_primMortonFrmLeaf[node.leftCntPar.x + node.leftCntPar.y - 1] + 1,
-				[=](const XMUINT4& pi) {
-					Vector4 relateVecPos{ bbCtrs.relateVecPos(m_prims[pi.x].ctr) };
+			PrimRef* pmid = std::partition(
+				&m_primRefs[node.leftCntPar.x],
+				&m_primRefs[node.leftCntPar.x + node.leftCntPar.y - 1] + 1,
+				[=](const PrimRef& pi) {
+					Vector4 relateVecPos{ bbCtrs.relateVecPos(m_prims[pi.primId].ctr) };
 					int b = m_sahSteps * comp(relateVecPos, minCostDim);
 					if (b == m_sahSteps) --b;
 					assert(b >= 0);
@@ -1985,15 +1655,13 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 					return b <= minCostSplitBucket;
 				}
 			);
-			mid = pmid - &m_primMortonFrmLeaf[0];
+			mid = pmid - &m_primRefs[0];
 		}
 		else {
 			// init leaf
-			auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
 			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-				//(*it).w = nodeId;
-				m_frame[(*it).z].z = i;
-				m_frame[(*it).z].w = nodeId;
+				m_primRefs[(*it).subsetNearest].leafId = nodeId;
 			}
 
 			++m_leafsCnt;
@@ -2020,73 +1688,7 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 	}
 }
 
-//void BVH::subdivideStoh(INT nodeId) {
-//	BVHNode& node{ m_nodes[nodeId] };
-//	if (node.leftCntPar.y < 2) {
-//		auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
-//		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-//			//(*it).w = nodeId;
-//			m_frame[(*it).z].z = i;
-//			m_frame[(*it).z].w = nodeId;
-//		}
-//
-//		++m_leafsCnt;
-//		updateDepths(nodeId);
-//		return;
-//	}
-//
-//	// determine split axis and position
-//	int axis{}, lCnt{}, rCnt{};
-//	float splitPos{};
-//	float cost{};
-//	cost = splitBinnedSAHStoh(node, axis, splitPos, lCnt, rCnt);
-//
-//	if (m_algBuild != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
-//		auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
-//		for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-//			//(*it).w = nodeId;
-//			m_frame[(*it).z].z = i;
-//			m_frame[(*it).z].w = nodeId;
-//		}
-//
-//		++m_leafsCnt;
-//		updateDepths(nodeId);
-//		return;
-//	}
-//
-//	// in-place partition
-//	for (auto l = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x),
-//		r = std::next(l, node.leftCntPar.y - 1); l != r;)
-//	{
-//		if (splitPos <= comp(m_prims[(*l).x].ctr, axis)) {
-//			std::swap((*l), (*r--));
-//		}
-//		else l++;
-//	}
-//
-//	// create child nodes
-//	int leftIdx{ m_nodesUsed++ };
-//	m_nodes[leftIdx].leftCntPar = {
-//		node.leftCntPar.x, lCnt, nodeId, 0
-//	};
-//	updateNodeBoundsStoh(leftIdx);
-//
-//	int rightIdx{ m_nodesUsed++ };
-//	m_nodes[rightIdx].leftCntPar = {
-//		node.leftCntPar.x + lCnt, rCnt, nodeId, 0
-//	};
-//	updateNodeBoundsStoh(rightIdx);
-//
-//	node.leftCntPar = {
-//		leftIdx, 0, node.leftCntPar.z, 0
-//	};
-//
-//	// recurse
-//	subdivideStoh(leftIdx);
-//	subdivideStoh(rightIdx);
-//}
-
-void BVH::subdivideStohQueue(INT rootId) {
+void BVH::subdivideStohQueue(INT rootId, bool swapPrimIdOnly) {
 	std::queue<int> nodes{};
 	nodes.push(rootId);
 
@@ -2097,11 +1699,9 @@ void BVH::subdivideStohQueue(INT rootId) {
 		BVHNode& node{ m_nodes[nodeId] };
 
 		if (node.leftCntPar.y <= m_primsPerLeaf) {
-			auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
 			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-				//(*it).w = nodeId;
-				m_frame[(*it).z].z = i;
-				m_frame[(*it).z].w = nodeId;
+				m_primRefs[(*it).subsetNearest].leafId = nodeId;
 			}
 
 			++m_leafsCnt;
@@ -2117,11 +1717,9 @@ void BVH::subdivideStohQueue(INT rootId) {
 
 		//if (m_algBuild != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
 		if (m_algBuild != 0 && cost >= node.leftCntPar.y) {
-			auto it = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
 			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-				//(*it).w = nodeId;
-				m_frame[(*it).z].z = i;
-				m_frame[(*it).z].w = nodeId;
+				m_primRefs[(*it).subsetNearest].leafId = nodeId;
 			}
 
 			++m_leafsCnt;
@@ -2130,11 +1728,12 @@ void BVH::subdivideStohQueue(INT rootId) {
 		}
 
 		// in-place partition
-		for (auto l = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x),
+		for (auto l = std::next(m_primRefs.begin(), node.leftCntPar.x),
 			r = std::next(l, node.leftCntPar.y - 1); l != r;)
 		{
-			if (splitPos <= comp(m_prims[(*l).x].ctr, axis)) {
-				std::swap((*l), (*r--));
+			if (splitPos <= comp(m_prims[(*l).primId].ctr, axis)) {
+				if (!swapPrimIdOnly) std::swap(*l, *r--);
+				else std::swap((*l).primId, (*r--).primId);
 			}
 			else l++;
 		}
@@ -2162,57 +1761,6 @@ void BVH::subdivideStohQueue(INT rootId) {
 	}
 }
 
-void BVH::subdivideStoh2(INT nodeId) {
-	BVHNode& node{ m_nodes[nodeId] };
-	if (node.leftCntPar.y < m_primsPerLeaf) {
-		++m_leafsCnt;
-		updateDepths(nodeId);
-		return;
-	}
-
-	// determine split axis and position
-	int axis{}, lCnt{}, rCnt{};
-	float splitPos{};
-	float cost{};
-	cost = splitBinnedSAHStoh(node, axis, splitPos, lCnt, rCnt);
-
-	if (m_algBuild != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
-		++m_leafsCnt;
-		updateDepths(nodeId);
-		return;
-	}
-
-	// in-place partition
-	for (auto l = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x),
-		r = std::next(l, node.leftCntPar.y - 1); l != r;)
-	{
-		if (splitPos <= comp(m_prims[(*(l)).x].ctr, axis))
-			std::swap((*(l)), (*(r--)));
-		else l++;
-	}
-
-	// create child nodes
-	int leftIdx{ m_nodesUsed++ };
-	m_nodes[leftIdx].leftCntPar = {
-		node.leftCntPar.x, lCnt, nodeId, 0
-	};
-	updateNodeBoundsStoh(leftIdx);
-
-	int rightIdx{ m_nodesUsed++ };
-	m_nodes[rightIdx].leftCntPar = {
-		node.leftCntPar.x + lCnt, rCnt, nodeId, 0
-	};
-	updateNodeBoundsStoh(rightIdx);
-
-	node.leftCntPar = {
-		leftIdx, 0, node.leftCntPar.z, 0
-	};
-
-	// recurse
-	subdivideStoh2(leftIdx);
-	subdivideStoh2(rightIdx);
-}
-
 float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt) {
 	float bestCost{ std::numeric_limits<float>::max() };
 	for (int a{}; a < 3; ++a) {
@@ -2226,10 +1774,10 @@ float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& le
 
 		float step = m_sahSteps / (bmax - bmin);
 
-		auto start = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+		auto start = std::next(m_primRefs.begin(), node.leftCntPar.x);
 		auto end = std::next(start, node.leftCntPar.y);
 		for (auto it = start; it != end; ++it) {
-			Primitive& t = m_prims[(*it).x];
+			Primitive& t = m_prims[(*it).primId];
 			int id{ std::min(
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) * step)
@@ -2298,10 +1846,10 @@ float BVH::splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, in
 			comp(binsBounds[i].bmax, a) = comp(binsBounds[i].bmin, a) + step;
 		}
 
-		auto start = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+		auto start = std::next(m_primRefs.begin(), node.leftCntPar.x);
 		auto end = std::next(start, node.leftCntPar.y);
 		for (auto it = start; it != end; ++it) {
-			Primitive& t = m_prims[(*it).x];
+			Primitive& t = m_prims[(*it).primId];
 			int id{ std::min(
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) / step)
@@ -2355,19 +1903,19 @@ void BVH::mortonSort() {
 	}
 
 	// compute morton indices of primitives
-	auto it = m_primMortonFrmLeaf.begin();
+	auto it = m_primRefs.begin();
 	for (int i{}; i < m_primsCnt; ++i) {
 		int mortonScale{ 1 << 10 };
 		Vector4 relateCtr{ aabb.relateVecPos(m_prims[i].ctr) };
-		(*it++).y = encodeMorton(mortonScale * relateCtr);
+		(*it++).mortonCode = encodeMorton(mortonScale * relateCtr);
 	}
 
 	// sort primitives
 	std::sort(
-		m_primMortonFrmLeaf.begin(),
-		m_primMortonFrmLeaf.end(),
-		[&](const XMUINT4& p1, const XMUINT4& p2) {
-			return p1.y < p2.y;
+		m_primRefs.begin(),
+		m_primRefs.end(),
+		[&](const PrimRef& p1, const PrimRef& p2) {
+			return p1.mortonCode < p2.mortonCode;
 		}
 	);
 }
@@ -2406,7 +1954,7 @@ void BVH::updateNodeBounds(INT nodeIdx) {
 	BVHNode& node = m_nodes[nodeIdx];
 	node.bb = {};
 	for (INT i{}; i < node.leftCntPar.y; ++i) {
-		Primitive& leafTri = m_prims[m_primMortonFrmLeaf[node.leftCntPar.x + i].x];
+		Primitive& leafTri = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 
 		node.bb.grow(leafTri.v0);
 		node.bb.grow(leafTri.v1);
@@ -2418,10 +1966,10 @@ void BVH::updateNodeBoundsStoh(INT nodeIdx) {
 	BVHNode& node = m_nodes[nodeIdx];
 	node.bb = {};
 
-	auto start = std::next(m_primMortonFrmLeaf.begin(), node.leftCntPar.x);
+	auto start = std::next(m_primRefs.begin(), node.leftCntPar.x);
 	auto end = std::next(start, node.leftCntPar.y);
 	for (auto it = start; it != end; ++it) {
-		Primitive& p = m_prims[(*it).x];
+		Primitive& p = m_prims[(*it).primId];
 
 		node.bb.grow(p.v0);
 		node.bb.grow(p.v1);
@@ -2441,7 +1989,7 @@ float BVH::evaluateSAH(BVHNode& node, int axis, float pos) {
 	AABB leftBox{}, rightBox{};
 	int leftCnt{}, rightCnt{};
 	for (int i{}; i < node.leftCntPar.y; ++i) {
-		Primitive& t = m_prims[m_primMortonFrmLeaf[node.leftCntPar.x + i].x];
+		Primitive& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 
 		if (comp(t.ctr, axis) < pos) {
 			++leftCnt;
@@ -2464,7 +2012,7 @@ float BVH::splitSAH(BVHNode& node, int& axis, float& splitPos) {
 	float bestCost{ std::numeric_limits<float>::max() };
 	for (int a{}; a < 3; ++a) {
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			Primitive& t = m_prims[m_primMortonFrmLeaf[node.leftCntPar.x + i].x];
+			Primitive& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 			Vector4 center{ t.ctr };
 			float pos = comp(center, a);
 			float cost = evaluateSAH(node, a, pos);
@@ -2516,7 +2064,7 @@ float BVH::splitBinnedSAH(BVHNode& node, int& axis, float& splitPos) {
 
 		float step = m_sahSteps / (bmax - bmin);
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			Primitive& t = m_prims[m_primMortonFrmLeaf[node.leftCntPar.x + i].x];
+			Primitive& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 			int id{ std::min(
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) * step)
@@ -2595,8 +2143,8 @@ void BVH::subdivide(INT nodeId) {
 	INT i{ node.leftCntPar.x };
 	INT j{ i + node.leftCntPar.y - 1 };
 	while (i <= j) {
-		if (splitPos <= comp(m_prims[m_primMortonFrmLeaf[i++].x].ctr, axis))
-			std::swap(m_primMortonFrmLeaf[--i].x, m_primMortonFrmLeaf[j--].x);
+		if (splitPos <= comp(m_prims[m_primRefs[i++].primId].ctr, axis))
+			std::swap(m_primRefs[--i].primId, m_primRefs[j--].primId);
 	}
 
 	// abort split if one of the sides is empty

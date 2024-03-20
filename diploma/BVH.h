@@ -106,9 +106,26 @@ private:
 	};
 	std::vector<BVHNode> m_nodes{};
 
-	std::vector<XMUINT4> m_primMortonFrmLeaf{};
-	std::vector<XMUINT4> m_frame{};
-	std::vector<XMUINT4>::iterator m_edge{};
+	struct PrimRef {
+		unsigned primId;
+		union {
+			unsigned mortonCode;
+			unsigned next;
+			unsigned primOrig;
+		};
+		union {
+			unsigned subsetNearest;
+			unsigned isAABBHighlight;
+		};
+		union {
+			unsigned leafId;
+			unsigned isSplitHighlight;
+		};
+	};
+
+	std::vector<PrimRef> m_primRefs{};
+	
+	std::vector<PrimRef>::iterator m_edge{};
 
 	AABB m_aabbAllCtrs{};
 	AABB m_aabbAllPrims{};
@@ -132,12 +149,8 @@ private:
 	INT m_sahSteps{ 32 };
 	// 0 - bruteforce
 	// 1 - morton
-	// 2 - bvh prims
-	// 3 - bvh prims +
-	// 4 - bvh tree
-	// 5 - bvh nodes
-	// 6 - smart bvh
-	int m_algInsert{ 6 };
+	// 2 - smart bvh
+	int m_algInsert{ 2 };
 	
 	// 0 - orig
 	// 1 - upd prims cnt
@@ -230,10 +243,6 @@ private:
 
 	int findBestLeafBruteforce(int primId);
 	int findBestLeafMorton(int primId, int frmNearest);
-	int findBestLeafBVHPrims(int primId, int frmNearest);
-	int findBestLeafBVHPrimsPlus(int primId, int frmNearest);
-	int findBestLeafBVHTree(int primId, int frmNearest);
-	int findBestLeafBVHNodes(int primId, int frmNearest);
 	int findBestLeafSmartBVH(int primId, int frmNearest);
 
 	// TODO with backtrack memory
@@ -291,11 +300,8 @@ private:
 		return node;
 	}
 
-	//void subdivideStoh(INT nodeId);
-	void subdivideStohQueue(INT rootId);
-	//void subdivideStohIntel(INT rootId);
+	void subdivideStohQueue(INT rootId, bool swapPrimIdOnly);
 	void subdivideStohIntelQueue(INT rootId);
-	void subdivideStoh2(INT nodeId);
 	void updateNodeBoundsStoh(INT nodeIdx);
 	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
 	float splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);

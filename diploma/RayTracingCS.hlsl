@@ -507,7 +507,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
         
     float4 color = lerp(colorNear, colorFar, 1.f - 1.f / depth);
     
-    if (triIdx[best.tId].y == 1) {
+    if (triIdx[best.tId].z == 1) {
         color.x += (1.f - color.x) / 0.5f;
     }
     
