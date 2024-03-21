@@ -3,6 +3,7 @@
 #include "framework.h"
 
 #include "AABB.h"
+#include <algorithm>
 #include <list>
 
 struct AABB;
@@ -86,7 +87,8 @@ private:
 	// ------------
 	//	LOGIC PART
 	// ------------
-	struct Primitive {
+	struct Prim {
+		int primId;
 		Vector4 v0{}, v1{}, v2{};
 		Vector4 ctr{};
 		AABB bb{};
@@ -98,7 +100,7 @@ private:
 			bb.grow(v2);
 		}
 	};
-	std::vector<Primitive> m_prims{};
+	std::vector<Prim> m_prims{};
 
 	struct BVHNode {
 		AABB bb{};
@@ -305,6 +307,85 @@ private:
 	void updateNodeBoundsStoh(INT nodeIdx);
 	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
 	float splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
+
+	std::vector<Vector4>& primPlaneIntersections(std::vector<Vector4>& vts, int dim, float plane) {
+		std::vector<Vector4> intersections{};
+
+		for (int i{}; i < 3; ++i) {
+			Vector4 v0{ vts[i] };
+			Vector4 v1{ vts[(i + 1) % 3] };
+
+			float v0dim(comp(vts[i], dim));
+			float v1dim(comp(vts[(i + 1) % 3], dim));
+
+			if (plane < v0dim || v1dim < plane)
+				continue;
+
+			// both on plane
+			if (v1dim - v0dim < std::numeric_limits<float>::epsilon()) {
+				intersections.push_back(v0);
+				intersections.push_back(v1);
+			}
+			// find intersection
+			else {
+				intersections.push_back(Vector4::Lerp(v0, v1, (plane - v0dim) / (v1dim - v0dim)));
+			}
+		}
+
+		return intersections;
+	}
+
+	std::pair<AABB, AABB> splitPrimNaive(const Prim& prim, AABB space, int dim, float plane) {
+		AABB left{}, right{};
+
+		Vector4 vts[3]{ prim.v0, prim.v1, prim.v2 };
+
+		for (int i{}; i < 3; ++i) {
+			Vector4 v0{ vts[i] };
+			Vector4 v1{ vts[(i + 1) % 3] };
+
+			float v0p{ comp(v0, dim) };
+			float v1p{ comp(v1, dim) };
+
+			if (v0p <= plane)
+				left.grow(v0);
+			if (plane <= v0p)
+				right.grow(v0);
+
+			if ((v0p < plane && plane < v1p) || (v1p < plane && plane < v0p)) {
+				Vector4 intersection{
+					Vector4::Lerp(v0, v1, std::max<float>(0.f, std::min<float>((plane - v0p) / (v1p - v0p), 1.f)))
+				};
+				left.grow(intersection);
+				right.grow(intersection);
+			}
+		}
+
+		comp(left.bmax, dim) = plane;
+		comp(right.bmin, dim) = plane;
+		return { AABB::bbIntersection(space, left), AABB::bbIntersection(space, right) };
+	}
+
+	std::pair<AABB, AABB> splitPrimSmart(const Prim& prim, AABB space, int dim, float plane) {
+		// sort vertices by dim
+		std::vector<Vector4> vts{ prim.v0, prim.v1, prim.v2 };
+		std::sort(vts.begin(), vts.end(), [&](const Vector4& v0, const Vector4& v1) {
+			return comp(const_cast<Vector4&>(v0), dim) < comp(const_cast<Vector4&>(v1), dim);
+		});
+
+		std::vector<float> pb{ comp(vts[0], dim), comp(vts[1], dim) , comp(vts[2], dim) };
+
+		float bmin{ comp(space.bmin, dim) };
+		float bmax{ comp(space.bmax, dim) };
+
+		if (pb[2] < bmin || bmax < pb[0]) return {{}, {}};
+
+		// find left
+		std::vector<Vector4> left;
+		if (comp(vts[0], dim) < bmin) {
+			left = primPlaneIntersections(vts, dim, bmin);
+		}
+	}
 
 	// sah, binned & other
 	void updateDepths(INT id);

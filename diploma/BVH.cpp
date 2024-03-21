@@ -1,6 +1,5 @@
 #include "BVH.h"
 
-#include <algorithm>
 #include <queue>
 #include <sstream>
 
@@ -821,6 +820,7 @@ void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMa
 
 	for (UINT i{}; i < m_primsCnt; ++i) {
 		m_prims[i] = {
+			static_cast<int>(i),
 			Vector4::Transform(vts[ids[i].x], modelMatrix),
 			Vector4::Transform(vts[ids[i].y], modelMatrix),
 			Vector4::Transform(vts[ids[i].z], modelMatrix)
@@ -1345,33 +1345,33 @@ void BVH::buildStochastic() {
 
 	for (int i{}, j{}; j < m_primsCntOrig; ++i, j = m_primRefs[j].next) {
 		if (!m_primSplitting || !isSplit[m_primRefs[j].primId]) {
-			temp[i] = m_primRefs[j];
+			temp[i].primId = m_primRefs[j].primId;
 			continue;
 		}
 		isSplit[m_primRefs[j].primId] = false;
 
-		Primitive& p{ m_prims[m_primRefs[j].primId] };
+		Prim& p{ m_prims[m_primRefs[j].primId] };
 		m_nodes[m_primRefs[m_primRefs[j].subsetNearest].leafId].leftCntPar.w += 3;
 
-		Primitive p0{ .v0{ p.v0 }, .v1{ (p.v0 + p.v1) / 2.f }, .v2{ (p.v0 + p.v2) / 2.f } };
+		Prim p0{ p.primId, p.v0, (p.v0 + p.v1) / 2.f, (p.v0 + p.v2) / 2.f };
 		p0.updCtrAndBB();
 		m_prims[m_primsCnt] = p0;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
 
-		Primitive p1{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ p.v1 }, .v2{ (p.v1 + p.v2) / 2.f } };
+		Prim p1{ p.primId, (p.v0 + p.v1) / 2.f, p.v1, (p.v1 + p.v2) / 2.f };
 		p1.updCtrAndBB();
 		m_prims[m_primsCnt] = p1;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
 
-		Primitive p2{ .v0{ (p.v0 + p.v2) / 2.f }, .v1{ (p.v1 + p.v2) / 2.f }, .v2{ p.v2 } };
+		Prim p2{ p.primId, (p.v0 + p.v2) / 2.f, (p.v1 + p.v2) / 2.f, p.v2 };
 		p2.updCtrAndBB();
 		m_prims[m_primsCnt] = p2;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
+		temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
 
-		Primitive p3{ .v0{ (p.v0 + p.v1) / 2.f }, .v1{ (p.v0 + p.v2) / 2.f }, .v2{ (p.v1 + p.v2) / 2.f } };
+		Prim p3{ p.primId, (p.v0 + p.v1) / 2.f, (p.v0 + p.v2) / 2.f, (p.v1 + p.v2) / 2.f };
 		p3.updCtrAndBB();
 		m_prims[m_primsCnt] = p3;
-		temp[i] = { static_cast<UINT>(m_primsCnt++), m_primRefs[j].primId, 0, 0 };
+		temp[i] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
 	}
 	m_primRefs = temp;
 
@@ -1396,9 +1396,8 @@ void BVH::buildStochastic() {
 
 	if (m_primSplitting) {
 		for (int i{}; i < m_primsCnt; ++i) {
-			bool isSplitted{ m_primRefs[i].primId >= m_primsCntOrig };
-			if (isSplitted) {
-				unsigned int primId{ m_primRefs[i].primOrig };
+			int primId{ m_prims[m_primRefs[i].primId].primId};
+			if (m_primRefs[i].primId != primId) {
 				m_primRefs[i].primId = primId;
 				m_primRefs[primId].leafId = 1;
 			}
@@ -1409,7 +1408,7 @@ void BVH::buildStochastic() {
 }
 
 float BVH::primInsertMetric(int primId, int nodeId) {
-	Primitive prim = m_prims[primId];
+	Prim prim = m_prims[primId];
 	BVHNode node = m_nodes[nodeId];
 
 	int leafPrimsCnt{ node.leftCntPar.y };
@@ -1475,7 +1474,7 @@ int BVH::findBestLeafMorton(int primId, int frmNearest) {
 }
 
 int BVH::findBestLeafSmartBVH(int primId, int frmNearest) {
-	Primitive prim = m_prims[primId];
+	Prim prim = m_prims[primId];
 
 	int bestLeaf{ static_cast<int>(m_primRefs[frmNearest].leafId) };
 	//float bestCost{ std::numeric_limits<float>::max() };
@@ -1509,8 +1508,11 @@ int BVH::findBestLeafSmartBVH(int primId, int frmNearest) {
 
 		int l{ node.leftCntPar.x };
 		float lCost{ cost };
-		if (int cnt = m_nodes[l].leftCntPar.y; cnt)
-			lCost += (cnt + 1) * AABB::bbUnion(m_nodes[l].bb, prim.bb).area() - cnt * m_nodes[l].bb.area();
+		int lCnt{ m_nodes[l].leftCntPar.y };
+		if (m_algInsertConds == 1 || m_algInsertConds == 3)
+			lCnt += m_nodes[l].leftCntPar.w;
+		if (lCnt)
+			lCost += (lCnt + 1) * AABB::bbUnion(m_nodes[l].bb, prim.bb).area() - lCnt * m_nodes[l].bb.area();
 		else
 			lCost += AABB::bbUnion(m_nodes[l].bb, prim.bb).area() - m_nodes[l].bb.area();
 		nodes.push({ l, lCost });
@@ -1519,8 +1521,11 @@ int BVH::findBestLeafSmartBVH(int primId, int frmNearest) {
 
 		int r{ node.leftCntPar.x + 1 };
 		float rCost{ cost };
-		if (int cnt = m_nodes[r].leftCntPar.y; cnt)
-			rCost += (cnt + 1) * AABB::bbUnion(m_nodes[r].bb, prim.bb).area() - cnt * m_nodes[r].bb.area();
+		int rCnt{ m_nodes[r].leftCntPar.y };
+		if (m_algInsertConds == 1 || m_algInsertConds == 3)
+			rCnt += m_nodes[r].leftCntPar.w;
+		if (rCnt)
+			rCost += (rCnt + 1) * AABB::bbUnion(m_nodes[r].bb, prim.bb).area() - rCnt * m_nodes[r].bb.area();
 		else
 			rCost += AABB::bbUnion(m_nodes[r].bb, prim.bb).area() - m_nodes[r].bb.area();
 		nodes.push({ r, rCost });
@@ -1713,7 +1718,13 @@ void BVH::subdivideStohQueue(INT rootId, bool swapPrimIdOnly) {
 		int axis{}, lCnt{}, rCnt{};
 		float splitPos{};
 		float cost{};
-		cost = splitSBVH(node, axis, splitPos, lCnt, rCnt);
+
+		float cost1 = splitSBVH(node, axis, splitPos, lCnt, rCnt);
+		cost = splitBinnedSAHStoh(node, axis, splitPos, lCnt, rCnt);
+
+		if (cost1 < cost) {
+			cost1 += std::numeric_limits<float>::epsilon();
+		}
 
 		//if (m_algBuild != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
 		if (m_algBuild != 0 && cost >= node.leftCntPar.y) {
@@ -1733,7 +1744,10 @@ void BVH::subdivideStohQueue(INT rootId, bool swapPrimIdOnly) {
 		{
 			if (splitPos <= comp(m_prims[(*l).primId].ctr, axis)) {
 				if (!swapPrimIdOnly) std::swap(*l, *r--);
-				else std::swap((*l).primId, (*r--).primId);
+				else {
+					std::swap((*l).primId, (*r).primId);
+					std::swap((*l).subsetNearest, (*r--).subsetNearest);
+				}
 			}
 			else l++;
 		}
@@ -1777,16 +1791,14 @@ float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& le
 		auto start = std::next(m_primRefs.begin(), node.leftCntPar.x);
 		auto end = std::next(start, node.leftCntPar.y);
 		for (auto it = start; it != end; ++it) {
-			Primitive& t = m_prims[(*it).primId];
+			Prim& t = m_prims[(*it).primId];
 			int id{ std::min(
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) * step)
 			) };
 			id = std::max<int>(0, id);
 			++primsCnt[id];
-			bounds[id].grow(t.v0);
-			bounds[id].grow(t.v1);
-			bounds[id].grow(t.v2);
+			bounds[id].grow(t.bb);
 		}
 
 		std::vector<float> lArea(m_sahSteps - 1);
@@ -1825,80 +1837,186 @@ float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& le
 
 float BVH::splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt) {
 	float bestCost{ std::numeric_limits<float>::max() };
-	for (int a{}; a < 3; ++a) {
-		float bmin{ comp(node.bb.bmin, a) };
-		float bmax{ comp(node.bb.bmax, a) };
-		if (bmin == bmax)
-			continue;
 
-		std::vector<AABB> bounds(m_sahSteps);
-		std::vector<int> primsCnt(m_sahSteps);
+	struct SpatialBin{
+		AABB bb{};
+		int enter{};
+		int exit{};
+	};
+
+	std::vector<SpatialBin> bins[3];
+	for (int dim{}; dim < 3; ++dim) {
+		bins[dim].resize(m_sahSteps);
+	}
+
+	SpatialBin best{};
+
+	for (int pId{ node.leftCntPar.x }; pId < node.leftCntPar.x + node.leftCntPar.y; ++pId) {
+		PrimRef& ref{ m_primRefs[pId] };
+		Prim& prim{ m_prims[ref.primId] };
+
+		for (int dim{}; dim < 3; ++dim) {
+			float bmin{ comp(node.bb.bmin, dim) };
+			float bmax{ comp(node.bb.bmax, dim) };
+
+			float step = (bmax - bmin) / m_sahSteps;
+
+			float pmin{ comp(prim.bb.bmin, dim) };
+			float pmax{ comp(prim.bb.bmax, dim) };
+
+			int binFirst{ std::max<int>(0, std::min<int>(m_sahSteps * (pmin - bmin) / (bmax - bmin), m_sahSteps - 1))};
+			int binLast{ std::max<int>(binFirst, std::min<int>(m_sahSteps * (pmax - bmin) / (bmax - bmin), m_sahSteps - 1))};
+
+			AABB curr{ prim.bb };
+			for (int b{ binFirst }; b < binLast; ++b) {
+				auto leftRight = splitPrimNaive(prim, curr, dim, bmin + step * (b + 1));
+				AABB left{ leftRight.first }, right{ leftRight.second };
+				bins[dim][b].bb.grow(left);
+				curr = right;
+			}
+			++bins[dim][binFirst].enter;
+			++bins[dim][binLast].exit;
+			bins[dim][binLast].bb.grow(curr);
+		}
+	}
+
+	for (int dim{}; dim < 3; ++dim) {
+		AABB right{};
+		std::vector<AABB> rest(m_sahSteps - 1);
+		for (int i{ m_sahSteps - 1 }; 0 < i; --i) {
+			right.grow(bins[dim][i].bb);
+			rest[i - 1] = right;
+		}
+
+		AABB left{};
+		int lCnt{};
+		int rCnt{ node.leftCntPar.y };
+
+		float bmin{ comp(node.bb.bmin, dim) };
+		float bmax{ comp(node.bb.bmax, dim) };
 
 		float step = (bmax - bmin) / m_sahSteps;
 
-		std::vector<AABB> binsBounds(m_sahSteps);
-		binsBounds[0] = node.bb;
-		comp(binsBounds[0].bmax, a) = bmin + step;
 		for (int i{ 1 }; i < m_sahSteps; ++i) {
-			binsBounds[i] = node.bb;
+			left.grow(bins[dim][i - 1].bb);
+			lCnt += bins[dim][i - 1].enter;
+			rCnt -= bins[dim][i - 1].exit;
 
-			comp(binsBounds[i].bmin, a) = comp(binsBounds[i - 1].bmax, a) + std::numeric_limits<float>::epsilon();
-			comp(binsBounds[i].bmax, a) = comp(binsBounds[i].bmin, a) + step;
-		}
-
-		auto start = std::next(m_primRefs.begin(), node.leftCntPar.x);
-		auto end = std::next(start, node.leftCntPar.y);
-		for (auto it = start; it != end; ++it) {
-			Primitive& t = m_prims[(*it).primId];
-			int id{ std::min(
-				m_sahSteps - 1,
-				static_cast<int>((comp(t.ctr, a) - bmin) / step)
-			) };
-			id = std::max<int>(0, id);
-			++primsCnt[id];
-			bounds[id].grow(t.v0);
-			bounds[id].grow(t.v1);
-			bounds[id].grow(t.v2);
-		}
-
-		std::vector<float> lArea(m_sahSteps - 1);
-		std::vector<float> rArea(m_sahSteps - 1);
-		std::vector<int> lCnt(m_sahSteps - 1);
-		std::vector<int> rCnt(m_sahSteps - 1);
-		AABB lBox{}, rBox{};
-		int lSum{}, rSum{};
-
-		for (int i{}; i < m_sahSteps - 1; ++i) {
-			lSum += primsCnt[i];
-			lCnt[i] = lSum;
-			lBox.grow(bounds[i]);
-			lArea[i] = lBox.area();
-
-			rSum += primsCnt[m_sahSteps - 1 - i];
-			rCnt[m_sahSteps - 2 - i] = rSum;
-			rBox.grow(bounds[m_sahSteps - 1 - i]);
-			rArea[m_sahSteps - 2 - i] = rBox.area();
-		}
-		step = (bmax - bmin) / m_sahSteps;
-		for (int i{}; i < m_sahSteps - 1; ++i) {
-			//float planeCost{ lCnt[i] * lArea[i] + rCnt[i] * rArea[i] };
-			float planeCost{ 1.f + (lCnt[i] * lArea[i] + rCnt[i] * rArea[i]) / node.bb.area() };
-			if (planeCost < bestCost) {
-				axis = a;
-				splitPos = bmin + (i + 1) * step;
-				leftCnt = lCnt[i];
-				rightCnt = rCnt[i];
-				bestCost = planeCost;
+			float currCost = 1.f + (lCnt * left.area() + rCnt * rest[i - 1].area()) / node.bb.area();
+			if (currCost < bestCost) {
+				axis = dim;
+				splitPos = bmin + i * step;
+				leftCnt = lCnt;
+				rightCnt = rCnt;
+				bestCost = currCost;
 			}
 		}
 	}
+
 	return bestCost;
+
+	//for (int a{}; a < 3; ++a) {
+	//	float bminNode{ comp(node.bb.bmin, a) };
+	//	float bmaxNode{ comp(node.bb.bmax, a) };
+	//	if (bminNode == bmaxNode) continue;
+
+	//	struct Bin {
+	//		AABB bounds{};
+	//		int primsCnt{};
+	//		//int entries{};
+	//		//int exits{};
+	//	};
+	//	std::vector<Bin> bins(m_sahSteps);
+
+	//	float step = (bmaxNode - bminNode) / m_sahSteps;
+
+	//	//std::vector<float> binsPlanes(m_sahSteps + 1);
+	//	//binsPlanes[0] = bminNode;
+	//	//for (int i{ 1 }; i < m_sahSteps + 1; ++i)
+	//	//	binsPlanes[i] = binsPlanes[i - 1] + step;
+	//	//assert(abs(binsPlanes[m_sahSteps] - bmaxNode) < std::numeric_limits<float>::epsilon());
+
+	//	auto start = std::next(m_primRefs.begin(), node.leftCntPar.x);
+	//	auto end = std::next(start, node.leftCntPar.y);
+	//	for (auto it = start; it != end; ++it) {
+	//		Prim& prim = m_prims[(*it).primId];
+
+	//		//Vector4 vts[3]{ prim.v0, prim.v1, prim.v2 };
+	//		//if (comp(vts[0], a) > comp(vts[1], a)) std::swap(vts[0], vts[1]);
+	//		//if (comp(vts[1], a) > comp(vts[2], a)) std::swap(vts[1], vts[2]);
+	//		//if (comp(vts[0], a) > comp(vts[1], a)) std::swap(vts[0], vts[1]);
+	//		//AABB primBB{ prim.bb };
+	//		//float primBBMin{ comp(primBB.bmin, a) };
+	//		//float primBBMax{ comp(primBB.bmax, a) };
+	//		//int binMinId{ static_cast<int>(m_sahSteps * (primBBMin - bminNode) / (bmaxNode - bminNode)) };
+	//		//int binMaxId{ static_cast<int>(m_sahSteps * (primBBMax - bminNode) / (bmaxNode - bminNode)) };
+	//		//++bins[binMinId].entries;
+	//		//++bins[binMaxId].exits;
+	//		//for (int b{ binMinId }; b <= binMaxId; ++b) {
+	//		//	Bin& bin = bins[b];
+	//		//	float binMin{ bminNode + b * step };
+	//		//	float binMax{ binMin + step };
+	//		//	if (binMax <= primBBMin || primBBMax <= binMin)
+	//		//		continue;
+	//		//	AABB somePrimBB{};
+	//		//	if (binMin <= primBBMin && primBBMax <= binMax)
+	//		//		somePrimBB = primBB;
+	//		//	else {
+	//		//	}
+	//		//}
+
+
+	//		int id{ std::min(
+	//			m_sahSteps - 1,
+	//			static_cast<int>((comp(prim.ctr, a) - bminNode) / step)
+	//		) };
+	//		id = std::max<int>(0, id);
+	//		++bins[id].primsCnt;
+	//		bins[id].bounds.grow(prim.v0);
+	//		bins[id].bounds.grow(prim.v1);
+	//		bins[id].bounds.grow(prim.v2);
+	//	}
+
+	//	std::vector<Bin> lBins(m_sahSteps - 1);
+	//	std::vector<Bin> rBins(m_sahSteps - 1);
+
+	//	std::vector<float> lArea(m_sahSteps - 1);
+	//	std::vector<float> rArea(m_sahSteps - 1);
+	//	std::vector<int> lCnt(m_sahSteps - 1);
+	//	std::vector<int> rCnt(m_sahSteps - 1);
+	//	AABB lBox{}, rBox{};
+	//	int lSum{}, rSum{};
+
+	//	for (int i{}; i < m_sahSteps - 1; ++i) {
+	//		lSum += bins[i].primsCnt;
+	//		lCnt[i] = lSum;
+	//		lBox.grow(bins[i].bounds);
+	//		lArea[i] = lBox.area();
+
+	//		rSum += bins[m_sahSteps - 1 - i].primsCnt;
+	//		rCnt[m_sahSteps - 2 - i] = rSum;
+	//		rBox.grow(bins[m_sahSteps - 1 - i].bounds);
+	//		rArea[m_sahSteps - 2 - i] = rBox.area();
+	//	}
+	//	step = (bmaxNode - bminNode) / m_sahSteps;
+	//	for (int i{}; i < m_sahSteps - 1; ++i) {
+	//		//float planeCost{ lCnt[i] * lArea[i] + rCnt[i] * rArea[i] };
+	//		float planeCost{ 1.f + (lCnt[i] * lArea[i] + rCnt[i] * rArea[i]) / node.bb.area() };
+	//		if (planeCost < bestCost) {
+	//			axis = a;
+	//			splitPos = bminNode + (i + 1) * step;
+	//			leftCnt = lCnt[i];
+	//			rightCnt = rCnt[i];
+	//			bestCost = planeCost;
+	//		}
+	//	}
+	//}
 }
 
 void BVH::mortonSort() {
 	// AABB of all primitives centroids
 	AABB aabb{};
-	for (const Primitive& tr : m_prims) {
+	for (const Prim& tr : m_prims) {
 		aabb.grow(tr.ctr);
 	}
 
@@ -1954,7 +2072,7 @@ void BVH::updateNodeBounds(INT nodeIdx) {
 	BVHNode& node = m_nodes[nodeIdx];
 	node.bb = {};
 	for (INT i{}; i < node.leftCntPar.y; ++i) {
-		Primitive& leafTri = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
+		Prim& leafTri = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 
 		node.bb.grow(leafTri.v0);
 		node.bb.grow(leafTri.v1);
@@ -1969,11 +2087,8 @@ void BVH::updateNodeBoundsStoh(INT nodeIdx) {
 	auto start = std::next(m_primRefs.begin(), node.leftCntPar.x);
 	auto end = std::next(start, node.leftCntPar.y);
 	for (auto it = start; it != end; ++it) {
-		Primitive& p = m_prims[(*it).primId];
-
-		node.bb.grow(p.v0);
-		node.bb.grow(p.v1);
-		node.bb.grow(p.v2);
+		Prim& p = m_prims[(*it).primId];
+		node.bb.grow(p.bb);
 	}
 }
 
@@ -1989,7 +2104,7 @@ float BVH::evaluateSAH(BVHNode& node, int axis, float pos) {
 	AABB leftBox{}, rightBox{};
 	int leftCnt{}, rightCnt{};
 	for (int i{}; i < node.leftCntPar.y; ++i) {
-		Primitive& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
+		Prim& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 
 		if (comp(t.ctr, axis) < pos) {
 			++leftCnt;
@@ -2012,7 +2127,7 @@ float BVH::splitSAH(BVHNode& node, int& axis, float& splitPos) {
 	float bestCost{ std::numeric_limits<float>::max() };
 	for (int a{}; a < 3; ++a) {
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			Primitive& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
+			Prim& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 			Vector4 center{ t.ctr };
 			float pos = comp(center, a);
 			float cost = evaluateSAH(node, a, pos);
@@ -2064,7 +2179,7 @@ float BVH::splitBinnedSAH(BVHNode& node, int& axis, float& splitPos) {
 
 		float step = m_sahSteps / (bmax - bmin);
 		for (int i{}; i < node.leftCntPar.y; ++i) {
-			Primitive& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
+			Prim& t = m_prims[m_primRefs[node.leftCntPar.x + i].primId];
 			int id{ std::min(
 				m_sahSteps - 1,
 				static_cast<int>((comp(t.ctr, a) - bmin) * step)

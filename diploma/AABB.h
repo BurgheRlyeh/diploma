@@ -22,6 +22,15 @@ struct AABB {
         0.f
     };
 
+    inline bool isEmpty() const {
+        return bmin.x == std::numeric_limits<float>::max()
+            && bmin.y == std::numeric_limits<float>::max()
+            && bmin.z == std::numeric_limits<float>::max()
+            && bmax.x == std::numeric_limits<float>::lowest()
+            && bmax.y == std::numeric_limits<float>::lowest()
+            && bmax.z == std::numeric_limits<float>::lowest();
+    }
+
     inline DirectX::SimpleMath::Vector4 getVert(int idx) const {
         return {
             idx & 1 ? bmax.x : bmin.x,
@@ -76,6 +85,13 @@ struct AABB {
         return AABB{
             DirectX::SimpleMath::Vector4::Min(bb1.bmin, bb2.bmin),
             DirectX::SimpleMath::Vector4::Max(bb1.bmax, bb2.bmax)
+        };
+    }
+
+    static inline AABB bbIntersection(const AABB& bb1, const AABB& bb2) {
+        return {
+            DirectX::SimpleMath::Vector4::Max(bb1.bmin, bb2.bmin),
+            DirectX::SimpleMath::Vector4::Min(bb1.bmin, bb2.bmin)
         };
     }
 };
