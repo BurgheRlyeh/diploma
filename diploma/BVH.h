@@ -4,7 +4,8 @@
 
 #include "AABB.h"
 #include <algorithm>
-#include <list>
+#include <map>
+#include <stack>
 
 struct AABB;
 
@@ -126,6 +127,7 @@ private:
 	};
 
 	std::vector<PrimRef> m_primRefs{};
+	std::map<unsigned, std::vector<unsigned>> m_subset2leafs{};
 	
 	std::vector<PrimRef>::iterator m_edge{};
 
@@ -146,44 +148,45 @@ private:
 	// 3 - binned sah
 	// 4 - stochastic
 	// 5 - psr
-	INT m_algBuild{ 4 };
-	INT m_primsPerLeaf{ 2 };
-	INT m_sahSteps{ 32 };
-	// 0 - bruteforce
-	// 1 - morton
-	// 2 - smart bvh
-	int m_algInsert{ 2 };
-	
-	// 0 - orig
-	// 1 - upd prims cnt
-	// 2 - upd aabb
-	// 3 - upd prims cnt & aabb
-	int m_algInsertConds{ 3 };
+	// 6 - sbvh
+INT m_algBuild{ 6 };
+INT m_primsPerLeaf{ 2 };
+INT m_sahSteps{ 32 };
+// 0 - bruteforce
+// 1 - morton
+// 2 - smart bvh
+int m_algInsert{ 2 };
 
-	bool m_toQBVH{ true };
+// 0 - orig
+// 1 - upd prims cnt
+// 2 - upd aabb
+// 3 - upd prims cnt & aabb
+int m_algInsertConds{ 2 };
 
-	// 0 - no prims splitting
-	// 1 - subset splitting before clustering
-	// 2 - prev clamp hist interval (naive)
-	// 3 - clamped w/o uniform (smart)
-	int m_primSplitting{};
+bool m_toQBVH{ true };
 
-	float m_primWeightMin{};
-	float m_primWeightMax{};
+// 0 - no prims splitting
+// 1 - subset splitting before clustering
+// 2 - prev clamp hist interval (naive)
+// 3 - clamped w/o uniform (smart)
+int m_primSplitting{};
 
-	float m_clampBase{ sqrtf(2.f) };
-	int m_clampOffset{ 32 };
-	int m_clampBinCnt{ 64 };
+float m_primWeightMin{};
+float m_primWeightMax{};
 
-	float m_clamp{};
-	int m_clampedCnt{};
-	int m_splitCnt{};
+float m_clampBase{ sqrtf(2.f) };
+int m_clampOffset{ 32 };
+int m_clampBinCnt{ 64 };
 
-	float m_frmPart{ 0.2f };
-	float m_uniform{ 0.1f };
-	int m_insertSearchWindow{ 10 };
+float m_clamp{};
+int m_clampedCnt{};
+int m_splitCnt{};
 
-	int m_frmSize{};
+float m_frmPart{ 0.2f };
+float m_uniform{ 0.1f };
+int m_insertSearchWindow{ 10 };
+
+int m_frmSize{};
 
 public:
 	void render(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer);
@@ -234,6 +237,25 @@ private:
 		}
 
 		f(nodeId);
+	}
+
+	template <typename T>
+	void forEachLeaf(int nodeId, T f) {
+		std::stack<int> nodes{};
+		nodes.push(nodeId);
+
+		while (!nodes.empty()) {
+			int n{ nodes.top() };
+			nodes.pop();
+
+			if (m_nodes[n].leftCntPar.y) {
+				f(n);
+			}
+			else {
+				nodes.push(m_nodes[n].leftCntPar.x + 1);
+				nodes.push(m_nodes[n].leftCntPar.x);
+			}
+		}
 	}
 
 	// stochastic
@@ -302,10 +324,13 @@ private:
 		return node;
 	}
 
+	void subdivideSBVHStohQueue(INT rootId, bool swapPrimIdOnly);
 	void subdivideStohQueue(INT rootId, bool swapPrimIdOnly);
 	void subdivideStohIntelQueue(INT rootId);
 	void updateNodeBoundsStoh(INT nodeIdx);
-	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
+	void updateNodeBoundsSBVH(INT nodeIdx);
+	float splitBinnedSAHStoh4SBVH(BVHNode& node, int& axis, float& splitPos, AABB& leftBb, int& leftCnt, AABB& rightBb, int& rightCnt);
+	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, AABB& leftBb, int& leftCnt, AABB& rightBb, int& rightCnt);
 	float splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
 
 	std::vector<Vector4>& primPlaneIntersections(std::vector<Vector4>& vts, int dim, float plane) {
@@ -369,22 +394,31 @@ private:
 	std::pair<AABB, AABB> splitPrimSmart(const Prim& prim, AABB space, int dim, float plane) {
 		// sort vertices by dim
 		std::vector<Vector4> vts{ prim.v0, prim.v1, prim.v2 };
+		size_t outer1st{};
+		for (int i{}; i < vts.size(); ++i) {
+			if (space.bmin.x <= vts[i].x && vts[i].x <= space.bmax.x &&
+				space.bmin.y <= vts[i].y && vts[i].y <= space.bmax.y &&
+				space.bmin.z <= vts[i].z && vts[i].z <= space.bmax.z) {
+				std::swap(vts[i], vts[outer1st++]);
+			}
+		}
+
 		std::sort(vts.begin(), vts.end(), [&](const Vector4& v0, const Vector4& v1) {
 			return comp(const_cast<Vector4&>(v0), dim) < comp(const_cast<Vector4&>(v1), dim);
 		});
 
-		std::vector<float> pb{ comp(vts[0], dim), comp(vts[1], dim) , comp(vts[2], dim) };
+		//std::vector<float> pb{ comp(vts[0], dim), comp(vts[1], dim) , comp(vts[2], dim) };
 
-		float bmin{ comp(space.bmin, dim) };
-		float bmax{ comp(space.bmax, dim) };
+		//float bmin{ comp(space.bmin, dim) };
+		//float bmax{ comp(space.bmax, dim) };
 
-		if (pb[2] < bmin || bmax < pb[0]) return {{}, {}};
+		//if (pb[2] < bmin || bmax < pb[0]) return {{}, {}};
 
-		// find left
-		std::vector<Vector4> left;
-		if (comp(vts[0], dim) < bmin) {
-			left = primPlaneIntersections(vts, dim, bmin);
-		}
+		//// find left
+		//std::vector<Vector4> left;
+		//if (comp(vts[0], dim) < bmin) {
+		//	left = primPlaneIntersections(vts, dim, bmin);
+		//}
 	}
 
 	// sah, binned & other

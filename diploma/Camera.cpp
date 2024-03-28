@@ -4,7 +4,7 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 void Camera::rotate(float dx, float dy) {
-    m_angX -= dx * ROTATE_COEF;
+    m_angZ -= dx * ROTATE_COEF;
     m_angY += dy * ROTATE_COEF;
     m_angY = (std::max)(m_angY, 0.1f - XM_PIDIV2);
     m_angY = (std::min)(m_angY, XM_PIDIV2 - 0.1f);
@@ -34,9 +34,9 @@ Vector3 Camera::getPoi() {
 
 Vector3 Camera::getDir(float shift) {
     return {
-        cosf(m_angY + shift) * cosf(m_angX),
+        cosf(m_angY + shift) * cosf(m_angZ),
         sinf(m_angY + shift),
-        cosf(m_angY + shift) * sinf(m_angX)
+        cosf(m_angY + shift) * sinf(m_angZ)
     };
 }
 

@@ -11,8 +11,8 @@ class Camera {
 
 	float m_r{ 5.f };
 
-	float m_angX{ -3.5f * DirectX::XM_PI / 4 };
-	float m_angY{ DirectX::XM_PI / 6 };
+	float m_angZ{ - DirectX::XM_PI / 2 };// -3.5f * DirectX::XM_PI / 4 };
+	float m_angY{};// DirectX::XM_PI / 6 };
 
 	float m_dForward{};
 	float m_dRight{};
