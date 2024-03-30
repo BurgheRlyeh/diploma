@@ -1752,25 +1752,38 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 		}
 
 		// determine split axis and position
-		AABB lBox{}, rBox{};
+		AABB lBoxBin{}, rBoxBin{}, lBoxSBVH{}, rBoxSBVH{};
 
 		int axisBin{}, axisSBVH{}, lCntBin{}, lCntSBVH{}, rCntBin{}, rCntSBVH{};
 		float splitPosBin{}, splitPosSBVH{};
-		float costBinned{ splitBinnedSAHStoh4SBVH(node, axisBin, splitPosBin, lBox, lCntBin, rBox, rCntBin) };
+		float costBinned{ splitBinnedSAHStoh4SBVH(node, axisBin, splitPosBin, lBoxBin, lCntBin, rBoxBin, rCntBin) };
+
+		if (costBinned == std::numeric_limits<float>::max()) {
+			for (int i{ node.leftCntPar.y }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
+				m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
+			}
+
+			++m_leafsCnt;
+			updateDepths(nodeId);
+			continue;
+		}
+
 		float costSBVH{ std::numeric_limits<float>::max() };
 		
-		bool isStdSubdiv{ m_primRefs.size() == 2 * m_primsCntOrig || AABB::bbIntersection(lBox, rBox).area() < 0.1f * node.bb.area() };
+		bool isStdSubdiv{ m_primRefs.size() == 2 * m_primsCntOrig || AABB::bbIntersection(lBoxBin, rBoxBin).area() < 0.1f * node.bb.area() };
 
 		if (!isStdSubdiv) {
-			costSBVH = splitSBVH(node, axisSBVH, splitPosSBVH, lCntSBVH, rCntSBVH);
+			costSBVH = splitSBVH(node, axisSBVH, splitPosSBVH, lBoxSBVH, lCntSBVH, rBoxSBVH, rCntSBVH);
 			isStdSubdiv = costBinned <= costSBVH + std::numeric_limits<float>::epsilon();
 		}
 
 		if (isStdSubdiv) {
-			int axis{ axisBin }, lCnt{ lCntBin }, rCnt{ rCntBin };
+			AABB lBox{ lBoxBin }, rBox{ rBoxBin };
+			int axis{ axisBin }, lCnt{}, rCnt{};
 			float splitPos{ splitPosBin };
 
-			if (costBinned >= node.leftCntPar.y) {
+			if (costBinned >= node.leftCntPar.y)
+			{
 				for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
 					m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
 				}
@@ -1784,14 +1797,26 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 			int rFirst{ node.leftCntPar.x };
 			for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
 				// if prim to left child
-				if (comp(m_prims[m_primRefs[i].primId].ctr, axis) < splitPos) {
+				if (comp(m_prims[m_primRefs[i].primId].ctr, axis) < splitPos + std::numeric_limits<float>::epsilon()) {
 					if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
 					else {
 						std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
 						std::swap(m_primRefs[i].subsetNearest, m_primRefs[rFirst].subsetNearest);
 					}
 					rFirst = m_primRefs[rFirst].next;
+					++lCnt;
 				}
+				else ++rCnt;
+			}
+
+			if (lCnt == 0 || rCnt == 0) {
+				for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
+					m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
+				}
+
+				++m_leafsCnt;
+				updateDepths(nodeId);
+				continue;
 			}
 
 			// create child nodes
@@ -1816,6 +1841,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 			nodes.push(rightIdx);
 		}
 		else {
+			AABB lBox{ lBoxSBVH }, rBox{ rBoxSBVH };
 			int axis{ axisSBVH }, lCnt{}, rCnt{};
 			float splitPos{ splitPosSBVH };
 
@@ -1840,7 +1866,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 
 				// if prim to left child
 				if (m_primRefs.size() == 2 * m_primsCntOrig) {
-					if (m_primRefs.size() == 2 * m_primsCntOrig && comp(prim.ctr, axis) < splitPos) {
+					if (comp(prim.ctr, axis) < splitPos + std::numeric_limits<float>::epsilon()) {
 						if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
 						else {
 							std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
@@ -1851,7 +1877,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 					}
 					else ++rCnt;
 				}
-				else if (primBoxMax + std::numeric_limits<float>::epsilon() < splitPos) {
+				else if (primBoxMax < splitPos + std::numeric_limits<float>::epsilon()) {
 					if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
 					else {
 						std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
@@ -1860,7 +1886,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 					rFirst = m_primRefs[rFirst].next;
 					++lCnt;
 				}
-				else if (splitPos + std::numeric_limits<float>::epsilon() < primBoxMin) {
+				else if (splitPos < primBoxMin + std::numeric_limits<float>::epsilon()) {
 					++rCnt;
 				}
 				// split primitive
@@ -1872,24 +1898,53 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 					rightPart.bb = lrBoxes.second;
 					//rightPart.ctr = rightPart.bb.bmin + rightPart.bb.bmax / 2;
 
-					prim = leftPart;
-					m_prims.push_back(rightPart);
+					//if (!leftPart.bb.isCorrect()) {
+					//	if (rightPart.bb.isCorrect()) {
+					//		prim = rightPart;
+					//		++rCnt;
+					//	}
+					//}
+					//else if (!rightPart.bb.isCorrect()) {
+					//	prim = leftPart;
+					//	if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
+					//	else {
+					//		std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
+					//		std::swap(m_primRefs[i].subsetNearest, m_primRefs[rFirst].subsetNearest);
+					//	}
+					//	rFirst = m_primRefs[rFirst].next;
+					//	++lCnt;
+					//}
+					//else {
+						prim = leftPart;
+						m_prims.push_back(rightPart);
 
-					PrimRef ref = m_primRefs[i]; // copy of curr
-					ref.primId = m_prims.size() - 1; // id on new rightPart prim
-					m_primRefs.push_back(ref);
-					m_primRefs[i].next = m_primRefs.size() - 1; // upd next
+						PrimRef ref = m_primRefs[i]; // copy of curr
+						ref.primId = m_prims.size() - 1; // id on new rightPart prim
+						m_primRefs.push_back(ref);
+						m_primRefs[i].next = m_primRefs.size() - 1; // upd next
 
-					if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
-					else {
-						std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
-						std::swap(m_primRefs[i].subsetNearest, m_primRefs[rFirst].subsetNearest);
-					}
-					i = m_primRefs.size() - 1;
-					rFirst = m_primRefs[rFirst].next;
-					++lCnt;
-					++rCnt;
+						if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
+						else {
+							std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
+							std::swap(m_primRefs[i].subsetNearest, m_primRefs[rFirst].subsetNearest);
+						}
+						i = m_primRefs.size() - 1;
+						rFirst = m_primRefs[rFirst].next;
+						++lCnt;
+						++rCnt;
+					//}
+
 				}
+			}
+
+			if (lCnt == 0 || rCnt == 0) {
+				for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
+					m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
+				}
+
+				++m_leafsCnt;
+				updateDepths(nodeId);
+				continue;
 			}
 
 			// create child nodes
@@ -2025,13 +2080,13 @@ float BVH::splitBinnedSAHStoh4SBVH(BVHNode& node, int& axis, float& splitPos, AA
 		std::vector<AABB> bounds(m_sahSteps);
 		std::vector<int> primsCnt(m_sahSteps);
 
-		float step = m_sahSteps / (bmax - bmin);
+		float step = (bmax - bmin) / m_sahSteps;
 
 		for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; ++cnt, i = m_primRefs[i].next) {
 			Prim& t = m_prims[m_primRefs[i].primId];
 			int id{ std::min(
 				m_sahSteps - 1,
-				static_cast<int>((comp(t.ctr, a) - bmin) * step)
+				static_cast<int>((comp(t.ctr, a) - bmin) / step)
 			) };
 			id = std::max<int>(0, id);
 			++primsCnt[id];
@@ -2138,7 +2193,7 @@ float BVH::splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, AABB& l
 	return bestCost;
 }
 
-float BVH::splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt) {
+float BVH::splitSBVH(BVHNode& node, int& axis, float& splitPos, AABB& leftBb, int& leftCnt, AABB& rightBb, int& rightCnt) {
 	float bestCost{ std::numeric_limits<float>::max() };
 
 	struct SpatialBin{
@@ -2209,7 +2264,9 @@ float BVH::splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, in
 			if (currCost < bestCost) {
 				axis = dim;
 				splitPos = bmin + i * step;
+				leftBb = left;
 				leftCnt = lCnt;
+				rightBb = rest[i - 1];
 				rightCnt = rCnt;
 				bestCost = currCost;
 			}

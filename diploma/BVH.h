@@ -331,7 +331,7 @@ private:
 	void updateNodeBoundsSBVH(INT nodeIdx);
 	float splitBinnedSAHStoh4SBVH(BVHNode& node, int& axis, float& splitPos, AABB& leftBb, int& leftCnt, AABB& rightBb, int& rightCnt);
 	float splitBinnedSAHStoh(BVHNode& node, int& axis, float& splitPos, AABB& leftBb, int& leftCnt, AABB& rightBb, int& rightCnt);
-	float splitSBVH(BVHNode& node, int& axis, float& splitPos, int& leftCnt, int& rightCnt);
+	float splitSBVH(BVHNode& node, int& axis, float& splitPos, AABB& leftBb, int& leftCnt, AABB& rightBb, int& rightCnt);
 
 	std::vector<Vector4>& primPlaneIntersections(std::vector<Vector4>& vts, int dim, float plane) {
 		std::vector<Vector4> intersections{};

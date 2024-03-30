@@ -31,6 +31,12 @@ struct AABB {
             && bmax.z == std::numeric_limits<float>::lowest();
     }
 
+    inline bool isCorrect() const {
+        return bmin.x + std::numeric_limits<float>::epsilon() < bmax.x
+            && bmin.y + std::numeric_limits<float>::epsilon() < bmax.y
+            && bmin.z + std::numeric_limits<float>::epsilon() < bmax.z;
+    }
+
     inline DirectX::SimpleMath::Vector4 getVert(int idx) const {
         return {
             idx & 1 ? bmax.x : bmin.x,
