@@ -1770,11 +1770,15 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 
 		float costSBVH{ std::numeric_limits<float>::max() };
 		
-		bool isStdSubdiv{ m_primRefs.size() == 2 * m_primsCntOrig || AABB::bbIntersection(lBoxBin, rBoxBin).area() < 0.1f * node.bb.area() };
+		bool isStdSubdiv{ m_primRefs.size() == 2 * m_primsCntOrig };
+		if (!isStdSubdiv) {
+			AABB intersect = AABB::bbIntersection(lBoxBin, rBoxBin);
+			isStdSubdiv = !intersect.isCorrect() || intersect.area() < 0.1f * node.bb.area();
+		}
 
 		if (!isStdSubdiv) {
 			costSBVH = splitSBVH(node, axisSBVH, splitPosSBVH, lBoxSBVH, lCntSBVH, rBoxSBVH, rCntSBVH);
-			isStdSubdiv = costBinned <= costSBVH + std::numeric_limits<float>::epsilon();
+			isStdSubdiv = costBinned < costSBVH + std::numeric_limits<float>::epsilon();
 		}
 
 		if (isStdSubdiv) {

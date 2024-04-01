@@ -14,8 +14,8 @@ using namespace DirectX::SimpleMath;
 
 void Geometry::ModelBuffer::updateMatrices() {
 	mModel =
-		//Matrix::CreateScale(0.01f)
-		Matrix::CreateScale(3.f)
+		Matrix::CreateScale(0.1f)
+		//Matrix::CreateScale(3.f)
 		* Matrix::CreateRotationX(-XM_PIDIV2)
 		//* Matrix::CreateRotationY(posAngle.w)
 		//* Matrix::CreateTranslation({ posAngle.x, posAngle.y, posAngle.z });
@@ -29,7 +29,7 @@ HRESULT Geometry::init(ID3D11Texture2D* tex) {
 	// upload geometry
 	{
 		// main - cube 11715 sponza sponzastructure
-		CSVGeometryLoader::loadFrom("11715.csv", &m_indices, &m_vertices);
+		CSVGeometryLoader::loadFrom("sponzastructure.csv", &m_indices, &m_vertices);
 	}
 
 	// create indices buffer
