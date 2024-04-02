@@ -183,7 +183,7 @@ BVH::BVH(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, unsigned in
 	// create model buffer
 	{
 		D3D11_BUFFER_DESC desc{
-			.ByteWidth{ sizeof(ModelBuffer) * (2 * (2 * primsCnt) + 1) },
+			.ByteWidth{ sizeof(ModelBuffer) * (2 * (2 * primsCnt) - 1) },
 			.Usage{ D3D11_USAGE_DYNAMIC },
 			.BindFlags{ D3D11_BIND_SHADER_RESOURCE },
 			.CPUAccessFlags{ D3D11_CPU_ACCESS_WRITE },
@@ -601,6 +601,16 @@ void BVH::renderBVHImGui() {
 		ImGui::DragFloat("Carcass unifrom", &carcassUniform, 1.f, 0.f, 100.f);
 		m_uniform = carcassUniform / 100.f;
 
+		ImGui::Text("Subset build algorithm:");
+
+		bool isSubsetBuildBinned{ m_algSubsetBuild == 0 };
+		ImGui::Checkbox("Subset BinnedSAH", &isSubsetBuildBinned);
+		if (isSubsetBuildBinned) m_algSubsetBuild = 0;
+
+		bool isSubsetBuildSBVH{ m_algSubsetBuild == 1 };
+		ImGui::Checkbox("Subset SBVH", &isSubsetBuildSBVH);
+		if (isSubsetBuildSBVH) m_algSubsetBuild = 1;
+
 		ImGui::Text("Insertion prims algorithm:");
 
 		bool isInsertBruteforce{ m_algInsert == 0 };
@@ -856,7 +866,7 @@ void BVH::build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelM
 		}
 		m_primRefs[m_primsCnt - 1].next = -1;
 
-		subdivideSBVHStohQueue(0, true);
+		subdivideSBVHStohQueue(0, true, [=](int nodeId) {});
 
 		std::vector<PrimRef> temp = m_primRefs;
 		size_t id{};
@@ -1338,26 +1348,67 @@ void BVH::buildStochastic() {
 		std::swap(*it++, *m_edge++);
 	}
 
-	m_subset2leafs.clear();
-
-	for (int i{}; i < frmSize - 1; ++i) {
-		m_primRefs[i].next = i + 1;
-	}
-	m_primRefs[frmSize - 1].next = m_primsCnt;
+	std::vector<PrimRef> notSubset(m_edge, m_primRefs.end());
+	m_edge = notSubset.begin();
+	m_primRefs.resize(frmSize);
 
 	// build frame
 	BVHNode& root = m_nodes[0];
 	root.leftCntPar = { 0, frmSize, -1, 0 };
 	updateNodeBoundsStoh(0);
-	subdivideStohQueue(0, true);
 
-	m_frmSize = frmSize;
-	for (int i{ m_frmSize }; i < m_primsCnt; ++i) {
+	if (m_algSubsetBuild == 0) {
+		subdivideStohQueue(0, true);
+
+		for (int i{}; i < frmSize - 1; ++i) {
+			m_primRefs[i].next = i + 1;
+		}
+		m_primRefs[frmSize - 1].next = std::numeric_limits<unsigned>::max();
+	}
+	else {
+		for (int i{}; i < frmSize; ++i) {
+			m_primRefs[i].next = i + 1;
+		}
+		m_primRefs[frmSize - 1].next = std::numeric_limits<unsigned>::max();
+
+		subdivideSBVHStohQueue(0, true, [=](int nodeId) {
+			BVHNode& node{ m_nodes[nodeId] };
+			for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; ++cnt, i = m_primRefs[i].next) {
+				m_primRefs[m_primRefs[i].subsetNearest].leafId = nodeId;
+			}
+		});
+
+		m_subset2leafs.clear();
+
+		std::vector<PrimRef> temp = m_primRefs;
+		size_t id{};
+		postForEach(0, [&](int nodeId) {
+			if (!m_nodes[nodeId].leftCntPar.y)
+				return;
+
+			int newLeft{ static_cast<int>(id) };
+			for (int i{ m_nodes[nodeId].leftCntPar.x }, cnt{}; cnt < m_nodes[nodeId].leftCntPar.y; ++cnt, i = temp[i].next) {
+				m_subset2leafs[temp[i].subsetNearest].push_back(nodeId);
+				m_primRefs[id] = temp[i];
+				m_primRefs[id].next = id + 1;
+				++id;
+			}
+			m_nodes[nodeId].leftCntPar.x = newLeft;
+		});
+		m_primRefs[m_primRefs.size() - 1].next = std::numeric_limits<unsigned>::max();
+	}
+	m_frmSize = frmSize = m_primRefs.size();
+	m_primRefs.resize(m_primRefs.size() + notSubset.size());
+	for (int i{}; i < notSubset.size(); ++i) {
 		int leaf{};
 		if (m_algInsert == 1)
 			leaf = findBestLeafMorton((*m_edge).primId, (*m_edge).subsetNearest);
-		else if (m_algInsert == 2)
-			leaf = findBestLeafSmartBVH((*m_edge).primId, (*m_edge).subsetNearest);
+		else if (m_algInsert == 2) {
+			int nearest = m_primRefs[(*m_edge).subsetNearest].leafId;
+			if (m_algSubsetBuild == 1)
+				nearest = m_subset2leafs[(*m_edge).subsetNearest][0];
+			leaf = findBestLeafSmartBVH((*m_edge).primId, nearest);
+		}
 		else
 			leaf = findBestLeafBruteforce((*m_edge).primId);
 		
@@ -1366,52 +1417,70 @@ void BVH::buildStochastic() {
 			m_nodes[leaf].bb.grow(m_prims[(*m_edge).primId].bb);
 
 		PrimRef& frmPrim{ m_primRefs[m_nodes[leaf].leftCntPar.x] };
-		m_primRefs[i].next = frmPrim.next;
-		frmPrim.next = i;
+		m_primRefs[frmSize + i] = *m_edge;
+		m_primRefs[frmSize + i].next = frmPrim.next;
+		frmPrim.next = i + frmSize;
 
 		++m_edge;
 	}
 
-	std::vector<PrimRef> temp;
-	if (!m_primSplitting)
-		temp.resize(m_primsCnt);
-	else {
-		temp.resize(2 * m_primsCnt - 1);
-		m_prims.resize(2 * m_primsCnt - 1);
-	}
+	int shitCounter{}, probably = m_primRefs.size();
 
-	for (int i{}, j{}; j < m_primsCntOrig; ++i, j = m_primRefs[j].next) {
-		if (!m_primSplitting || !isSplit[m_primRefs[j].primId]) {
-			temp[i].primId = m_primRefs[j].primId;
-			temp[i].next = i + 1;
-			continue;
+	if (m_algSubsetBuild == 0) {
+		std::vector<PrimRef> temp;
+		if (!m_primSplitting)
+			temp.resize(m_primsCnt);
+		else {
+			temp.resize(2 * m_primsCnt - 1);
+			m_prims.resize(2 * m_primsCnt - 1);
 		}
-		isSplit[m_primRefs[j].primId] = false;
 
-		Prim& p{ m_prims[m_primRefs[j].primId] };
-		m_nodes[m_primRefs[m_primRefs[j].subsetNearest].leafId].leftCntPar.w += 3;
+		for (int i{}, j{}; j < m_primRefs.size(); ++i, j = m_primRefs[j].next) {
+			++shitCounter;
+			if (!m_primSplitting || !isSplit[m_primRefs[j].primId]) {
+				temp[i].primId = m_primRefs[j].primId;
+				temp[i].next = i + 1;
+				continue;
+			}
+			isSplit[m_primRefs[j].primId] = false;
 
-		Prim p0{ p.primId, p.v0, (p.v0 + p.v1) / 2.f, (p.v0 + p.v2) / 2.f };
-		p0.updCtrAndBB();
-		m_prims[m_primsCnt] = p0;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
+			Prim& p{ m_prims[m_primRefs[j].primId] };
+			m_nodes[m_primRefs[m_primRefs[j].subsetNearest].leafId].leftCntPar.w += 3;
 
-		Prim p1{ p.primId, (p.v0 + p.v1) / 2.f, p.v1, (p.v1 + p.v2) / 2.f };
-		p1.updCtrAndBB();
-		m_prims[m_primsCnt] = p1;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
+			Prim p0{ p.primId, p.v0, (p.v0 + p.v1) / 2.f, (p.v0 + p.v2) / 2.f };
+			p0.updCtrAndBB();
+			m_prims[m_primsCnt] = p0;
+			temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
 
-		Prim p2{ p.primId, (p.v0 + p.v2) / 2.f, (p.v1 + p.v2) / 2.f, p.v2 };
-		p2.updCtrAndBB();
-		m_prims[m_primsCnt] = p2;
-		temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
+			Prim p1{ p.primId, (p.v0 + p.v1) / 2.f, p.v1, (p.v1 + p.v2) / 2.f };
+			p1.updCtrAndBB();
+			m_prims[m_primsCnt] = p1;
+			temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
 
-		Prim p3{ p.primId, (p.v0 + p.v1) / 2.f, (p.v0 + p.v2) / 2.f, (p.v1 + p.v2) / 2.f };
-		p3.updCtrAndBB();
-		m_prims[m_primsCnt] = p3;
-		temp[i] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
+			Prim p2{ p.primId, (p.v0 + p.v2) / 2.f, (p.v1 + p.v2) / 2.f, p.v2 };
+			p2.updCtrAndBB();
+			m_prims[m_primsCnt] = p2;
+			temp[i++] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
+
+			Prim p3{ p.primId, (p.v0 + p.v1) / 2.f, (p.v0 + p.v2) / 2.f, (p.v1 + p.v2) / 2.f };
+			p3.updCtrAndBB();
+			m_prims[m_primsCnt] = p3;
+			temp[i] = { static_cast<UINT>(m_primsCnt++), 0, 0, 0 };
+		}
+		m_primRefs = temp;
 	}
-	m_primRefs = temp;
+	else if (m_algSubsetBuild == 1) {
+		std::vector<PrimRef> temp{ m_primRefs };
+		for (int i{}, j{}; j < temp.size(); ++i, j = temp[j].next) {
+			m_primRefs[i] = temp[j];
+			++shitCounter;
+		}
+	}
+
+	std::wstringstream wss;
+	wss << TEXT("______________") << shitCounter << TEXT(" ") << probably << TEXT("______________") << std::endl;
+	OutputDebugStringW(wss.str().c_str());
+
 
 	m_leafsCnt = 0;
 	int firstOffset{};
@@ -1432,15 +1501,15 @@ void BVH::buildStochastic() {
 		subdivideStohQueue(nodeId, false);
 	});
 
-	if (m_primSplitting) {
-		for (int i{}; i < m_primsCnt; ++i) {
+	//if (m_primSplitting) {
+		for (int i{}; i < m_primRefs.size(); ++i) {
 			int primId{ m_prims[m_primRefs[i].primId].primId};
 			if (m_primRefs[i].primId != primId) {
 				m_primRefs[i].primId = primId;
-				m_primRefs[primId].leafId = 1;
+				//m_primRefs[primId].leafId = 1;
 			}
 		}
-	}
+	//}
 	  
 	m_nodes[0] = m_nodes[0];
 }
@@ -1514,9 +1583,9 @@ int BVH::findBestLeafMorton(int primId, int frmNearest) {
 int BVH::findBestLeafSmartBVH(int primId, int frmNearest) {
 	Prim prim = m_prims[primId];
 
-	int bestLeaf{ static_cast<int>(m_primRefs[frmNearest].leafId) };
+	int bestLeaf{ static_cast<int>(frmNearest) };
 	//float bestCost{ std::numeric_limits<float>::max() };
-	float bestCost{ primInsertMetric(primId, m_primRefs[frmNearest].leafId) };
+	float bestCost{ primInsertMetric(primId, frmNearest) };
 
 	//std::queue<std::pair<int, float>> nodes{};
 	auto cmp = [](const std::pair<int, float>& a, const std::pair<int, float>& b) {
@@ -1731,7 +1800,7 @@ void BVH::subdivideStohIntelQueue(int rootId) {
 	}
 }
 
-void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
+void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly, std::function<void(int)> leafProc) {
 	std::queue<int> nodes{};
 	nodes.push(rootId);
 
@@ -1742,12 +1811,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 		BVHNode& node{ m_nodes[nodeId] };
 
 		if (node.leftCntPar.y <= m_primsPerLeaf) {
-			for (int i{ node.leftCntPar.y }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
-				m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
-			}
-
-			++m_leafsCnt;
-			updateDepths(nodeId);
+			leafProc(nodeId);
 			continue;
 		}
 
@@ -1759,12 +1823,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 		float costBinned{ splitBinnedSAHStoh4SBVH(node, axisBin, splitPosBin, lBoxBin, lCntBin, rBoxBin, rCntBin) };
 
 		if (costBinned == std::numeric_limits<float>::max()) {
-			for (int i{ node.leftCntPar.y }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
-				m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
-			}
-
-			++m_leafsCnt;
-			updateDepths(nodeId);
+			leafProc(nodeId);
 			continue;
 		}
 
@@ -1788,12 +1847,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 
 			if (costBinned >= node.leftCntPar.y)
 			{
-				for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
-					m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
-				}
-
-				++m_leafsCnt;
-				updateDepths(nodeId);
+				leafProc(nodeId);
 				continue;
 			}
 
@@ -1814,12 +1868,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 			}
 
 			if (lCnt == 0 || rCnt == 0) {
-				for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
-					m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
-				}
-
-				++m_leafsCnt;
-				updateDepths(nodeId);
+				leafProc(nodeId);
 				continue;
 			}
 
@@ -1850,12 +1899,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 			float splitPos{ splitPosSBVH };
 
 			if (costSBVH >= node.leftCntPar.y || m_primRefs.size() == 2 * m_primsCntOrig) {
-				for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
-					m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
-				}
-
-				++m_leafsCnt;
-				updateDepths(nodeId);
+				leafProc(nodeId);
 				continue;
 			}
 
@@ -1942,12 +1986,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly) {
 			}
 
 			if (lCnt == 0 || rCnt == 0) {
-				for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; i = m_primRefs[i].next, ++cnt) {
-					m_subset2leafs[m_primRefs[i].primId].push_back(nodeId);
-				}
-
-				++m_leafsCnt;
-				updateDepths(nodeId);
+				leafProc(nodeId);
 				continue;
 			}
 

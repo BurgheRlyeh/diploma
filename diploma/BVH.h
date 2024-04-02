@@ -4,6 +4,7 @@
 
 #include "AABB.h"
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <stack>
 
@@ -114,7 +115,6 @@ private:
 		union {
 			unsigned mortonCode;
 			unsigned next;
-			unsigned primOrig;
 		};
 		union {
 			unsigned subsetNearest;
@@ -149,44 +149,51 @@ private:
 	// 4 - stochastic
 	// 5 - psr
 	// 6 - sbvh
-INT m_algBuild{ 6 };
-INT m_primsPerLeaf{ 2 };
-INT m_sahSteps{ 32 };
-// 0 - bruteforce
-// 1 - morton
-// 2 - smart bvh
-int m_algInsert{ 2 };
+	INT m_algBuild{ 6 };
+	INT m_primsPerLeaf{ 2 };
+	INT m_sahSteps{ 32 };
+	// 0 - bruteforce
+	// 1 - morton
+	// 2 - smart bvh
+	int m_algInsert{ 2 };
 
-// 0 - orig
-// 1 - upd prims cnt
-// 2 - upd aabb
-// 3 - upd prims cnt & aabb
-int m_algInsertConds{ 2 };
+	// 0 - binned sah
+	// 1 - sbvh
+	int m_algSubsetBuild{};
+	// 0 - binned sah
+	// 1 - sbvh
+	int m_algNotSubsetBuild{};
 
-bool m_toQBVH{ true };
+	// 0 - orig
+	// 1 - upd prims cnt
+	// 2 - upd aabb
+	// 3 - upd prims cnt & aabb
+	int m_algInsertConds{ 2 };
 
-// 0 - no prims splitting
-// 1 - subset splitting before clustering
-// 2 - prev clamp hist interval (naive)
-// 3 - clamped w/o uniform (smart)
-int m_primSplitting{};
+	bool m_toQBVH{ true };
 
-float m_primWeightMin{};
-float m_primWeightMax{};
+	// 0 - no prims splitting
+	// 1 - subset splitting before clustering
+	// 2 - prev clamp hist interval (naive)
+	// 3 - clamped w/o uniform (smart)
+	int m_primSplitting{};
 
-float m_clampBase{ sqrtf(2.f) };
-int m_clampOffset{ 32 };
-int m_clampBinCnt{ 64 };
+	float m_primWeightMin{};
+	float m_primWeightMax{};
 
-float m_clamp{};
-int m_clampedCnt{};
-int m_splitCnt{};
+	float m_clampBase{ sqrtf(2.f) };
+	int m_clampOffset{ 32 };
+	int m_clampBinCnt{ 64 };
 
-float m_frmPart{ 0.2f };
-float m_uniform{ 0.1f };
-int m_insertSearchWindow{ 10 };
+	float m_clamp{};
+	int m_clampedCnt{};
+	int m_splitCnt{};
 
-int m_frmSize{};
+	float m_frmPart{ 0.2f };
+	float m_uniform{ 0.1f };
+	int m_insertSearchWindow{ 10 };
+
+	int m_frmSize{};
 
 public:
 	void render(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer);
@@ -324,7 +331,7 @@ private:
 		return node;
 	}
 
-	void subdivideSBVHStohQueue(INT rootId, bool swapPrimIdOnly);
+	void subdivideSBVHStohQueue(INT rootId, bool swapPrimIdOnly, std::function<void(int)> leafProc);
 	void subdivideStohQueue(INT rootId, bool swapPrimIdOnly);
 	void subdivideStohIntelQueue(INT rootId);
 	void updateNodeBoundsStoh(INT nodeIdx);
