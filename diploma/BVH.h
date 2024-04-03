@@ -149,7 +149,7 @@ private:
 	// 4 - stochastic
 	// 5 - psr
 	// 6 - sbvh
-	INT m_algBuild{ 6 };
+	INT m_algBuild{ 4 };
 	INT m_primsPerLeaf{ 2 };
 	INT m_sahSteps{ 32 };
 	// 0 - bruteforce
@@ -159,10 +159,10 @@ private:
 
 	// 0 - binned sah
 	// 1 - sbvh
-	int m_algSubsetBuild{};
+	int m_algSubsetBuild{ 1 };
 	// 0 - binned sah
 	// 1 - sbvh
-	int m_algNotSubsetBuild{};
+	int m_algNotSubsetBuild{ 1 };
 
 	// 0 - orig
 	// 1 - upd prims cnt

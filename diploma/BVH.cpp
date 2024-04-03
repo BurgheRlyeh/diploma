@@ -611,6 +611,16 @@ void BVH::renderBVHImGui() {
 		ImGui::Checkbox("Subset SBVH", &isSubsetBuildSBVH);
 		if (isSubsetBuildSBVH) m_algSubsetBuild = 1;
 
+		ImGui::Text("Non-Subset build algorithm:");
+
+		bool isNonSubsetBuildBinned{ m_algNotSubsetBuild == 0 };
+		ImGui::Checkbox("Non-Subset BinnedSAH", &isNonSubsetBuildBinned);
+		if (isNonSubsetBuildBinned) m_algNotSubsetBuild = 0;
+
+		bool isNonSubsetBuildSBVH{ m_algNotSubsetBuild == 1 };
+		ImGui::Checkbox("Non-Subset SBVH", &isNonSubsetBuildSBVH);
+		if (isNonSubsetBuildSBVH) m_algNotSubsetBuild = 1;
+
 		ImGui::Text("Insertion prims algorithm:");
 
 		bool isInsertBruteforce{ m_algInsert == 0 };
@@ -1424,8 +1434,6 @@ void BVH::buildStochastic() {
 		++m_edge;
 	}
 
-	int shitCounter{}, probably = m_primRefs.size();
-
 	if (m_algSubsetBuild == 0) {
 		std::vector<PrimRef> temp;
 		if (!m_primSplitting)
@@ -1436,7 +1444,6 @@ void BVH::buildStochastic() {
 		}
 
 		for (int i{}, j{}; j < m_primRefs.size(); ++i, j = m_primRefs[j].next) {
-			++shitCounter;
 			if (!m_primSplitting || !isSplit[m_primRefs[j].primId]) {
 				temp[i].primId = m_primRefs[j].primId;
 				temp[i].next = i + 1;
@@ -1473,17 +1480,12 @@ void BVH::buildStochastic() {
 		std::vector<PrimRef> temp{ m_primRefs };
 		for (int i{}, j{}; j < temp.size(); ++i, j = temp[j].next) {
 			m_primRefs[i] = temp[j];
-			++shitCounter;
 		}
 	}
 
-	std::wstringstream wss;
-	wss << TEXT("______________") << shitCounter << TEXT(" ") << probably << TEXT("______________") << std::endl;
-	OutputDebugStringW(wss.str().c_str());
-
 
 	m_leafsCnt = 0;
-	int firstOffset{};
+	int firstOffset{}, nextCnt{};
 	postForEach(0, [&](int nodeId) {
 		if (!m_nodes[nodeId].leftCntPar.y) {
 			m_nodes[nodeId].bb = AABB::bbUnion(
@@ -1498,18 +1500,42 @@ void BVH::buildStochastic() {
 		firstOffset += m_nodes[nodeId].leftCntPar.w;
 
 		updateNodeBoundsStoh(nodeId);
-		subdivideStohQueue(nodeId, false);
+		if (m_algNotSubsetBuild == 0)
+			subdivideStohQueue(nodeId, false);
+		else if (m_algNotSubsetBuild == 1) {
+			for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
+				m_primRefs[m_nodes[nodeId].leftCntPar.x + i].next = ++nextCnt;
+			}
+
+			subdivideSBVHStohQueue(nodeId, true, [=](int n) {
+				++m_leafsCnt;
+			});
+		}
 	});
 
-	//if (m_primSplitting) {
-		for (int i{}; i < m_primRefs.size(); ++i) {
-			int primId{ m_prims[m_primRefs[i].primId].primId};
-			if (m_primRefs[i].primId != primId) {
-				m_primRefs[i].primId = primId;
-				//m_primRefs[primId].leafId = 1;
+	if (m_algNotSubsetBuild == 1) {
+		std::vector<PrimRef> temp = m_primRefs;
+		size_t id{};
+		postForEach(0, [&](int nodeId) {
+			if (!m_nodes[nodeId].leftCntPar.y)
+				return;
+
+			int newLeft{ static_cast<int>(id) };
+			for (int i{ m_nodes[nodeId].leftCntPar.x }, cnt{}; cnt < m_nodes[nodeId].leftCntPar.y; ++cnt, i = temp[i].next) {
+				m_primRefs[id] = temp[i];
+				m_primRefs[id].primId = m_prims[m_primRefs[id].primId].primId;
+				++id;
 			}
+			m_nodes[nodeId].leftCntPar.x = newLeft;
+		});
+	}
+
+	for (int i{}; i < m_primRefs.size(); ++i) {
+		int primId{ m_prims[m_primRefs[i].primId].primId};
+		if (m_primRefs[i].primId != primId) {
+			m_primRefs[i].primId = primId;
 		}
-	//}
+	}
 	  
 	m_nodes[0] = m_nodes[0];
 }
@@ -1832,7 +1858,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly, std::function<
 		bool isStdSubdiv{ m_primRefs.size() == 2 * m_primsCntOrig };
 		if (!isStdSubdiv) {
 			AABB intersect = AABB::bbIntersection(lBoxBin, rBoxBin);
-			isStdSubdiv = !intersect.isCorrect() || intersect.area() < 0.1f * node.bb.area();
+			isStdSubdiv = !intersect.isCorrect() || intersect.area() < 0.01f * node.bb.area();
 		}
 
 		if (!isStdSubdiv) {
