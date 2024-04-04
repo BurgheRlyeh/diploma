@@ -893,7 +893,7 @@ void BVH::build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelM
 			m_nodes[nodeId].leftCntPar.x = newLeft;
 		});
 
-		m_primRefs = m_primRefs;
+		m_primsCnt = m_primRefs.size();
 		
 	}
 	else if (m_algBuild != 4) {
@@ -1483,15 +1483,15 @@ void BVH::buildStochastic() {
 		}
 	}
 
-
 	m_leafsCnt = 0;
-	int firstOffset{}, nextCnt{};
+	int firstOffset{}, nextCnt{}, lastNodeId{};
 	postForEach(0, [&](int nodeId) {
 		if (!m_nodes[nodeId].leftCntPar.y) {
 			m_nodes[nodeId].bb = AABB::bbUnion(
 				m_nodes[m_nodes[nodeId].leftCntPar.x].bb,
 				m_nodes[m_nodes[nodeId].leftCntPar.x + 1].bb
 			);
+			lastNodeId = nodeId;
 			return;
 		}
 
@@ -1511,6 +1511,8 @@ void BVH::buildStochastic() {
 				++m_leafsCnt;
 			});
 		}
+
+		lastNodeId = nodeId;
 	});
 
 	if (m_algNotSubsetBuild == 1) {
@@ -1536,7 +1538,8 @@ void BVH::buildStochastic() {
 			m_primRefs[i].primId = primId;
 		}
 	}
-	  
+	
+	m_primsCnt = m_primRefs.size();
 	m_nodes[0] = m_nodes[0];
 }
 
@@ -2298,6 +2301,9 @@ float BVH::splitSBVH(BVHNode& node, int& axis, float& splitPos, AABB& leftBb, in
 			for (int b{ binFirst }; b < binLast; ++b) {
 				auto leftRight = splitPrimNaive(prim, curr, dim, bmin + step * (b + 1));
 				AABB left{ leftRight.first }, right{ leftRight.second };
+				//if (!left.isCorrect() || !right.isCorrect()) {
+				//	return std::numeric_limits<float>::max();
+				//}
 				bins[dim][b].bb.grow(left);
 				curr = right;
 			}
