@@ -367,9 +367,15 @@ private:
 		return intersections;
 	}
 
+	std::pair<AABB, AABB> splitPrimSuperNaive(const Prim& prim, AABB space, int dim, float plane) {
+		AABB left{ prim.bb }, right{ prim.bb };
+		comp(left.bmax, dim) = comp(right.bmin, dim) = plane;
+		return { AABB::bbIntersection(space, left), AABB::bbIntersection(space, right) };
+	}
+
 	std::pair<AABB, AABB> splitPrimNaive(const Prim& prim, AABB space, int dim, float plane) {
 		AABB left{}, right{};
-
+		
 		Vector4 vts[3]{ prim.v0, prim.v1, prim.v2 };
 
 		for (int i{}; i < 3; ++i) {
@@ -399,38 +405,88 @@ private:
 	}
 
 	std::pair<AABB, AABB> splitPrimSmart(const Prim& prim, AABB space, int dim, float plane) {
-		// sort vertices by dim
-		std::vector<Vector4> vts{ prim.v0, prim.v1, prim.v2 };
-		size_t outer1st{};
-		for (int i{}; i < vts.size(); ++i) {
-			if (space.bmin.x <= vts[i].x && vts[i].x <= space.bmax.x &&
-				space.bmin.y <= vts[i].y && vts[i].y <= space.bmax.y &&
-				space.bmin.z <= vts[i].z && vts[i].z <= space.bmax.z) {
-				std::swap(vts[i], vts[outer1st++]);
+		AABB left{}, right{};
+		
+		Vector4 vts[3]{ prim.v0, prim.v1, prim.v2 };
+
+		for (int i{}; i < 3; ++i) {
+			Vector4 vtx0{ vts[i] };
+			Vector4 vtx1{ vts[(i + 1) % 3] };
+
+			Vector3 v0{ vtx0.x, vtx0.y, vtx0.z };
+			Vector3 v1{ vtx1.x, vtx1.y, vtx1.z };
+
+			Ray edge{ v0, v1 - v0 };
+
+			std::vector<Vector4> intsecs{};
+
+			if (space.contains(vtx0))
+				intsecs.push_back(vtx0);
+			if (space.contains(vtx1))
+				intsecs.push_back(vtx1);
+
+			for (int a{}; a < 3 && intsecs.size() != 2; ++a) {
+				Vector3 norm{};
+				comp(norm, a) = 1.f;
+
+				Plane pmin{ { space.bmin.x, space.bmin.y, space.bmin.z }, norm };
+				Plane pmax{ { space.bmax.x, space.bmax.y, space.bmax.z }, norm };
+
+				float t{};
+				if (edge.Intersects(pmin, t) && t <= 1) {
+					Vector4 intsec{ Vector4::Lerp(vtx0, vtx1, t) };
+					intsecs.push_back(intsec);
+				}
+				if (edge.Intersects(pmax, t) && t <= 1) {
+					Vector4 intsec{ Vector4::Lerp(vtx0, vtx1, t) };
+					intsecs.push_back(intsec);
+				}
+			}
+
+			if (intsecs.empty()) {
+				continue;
+			}
+
+			assert(intsecs.size() == 2);
+
+			vtx0 = intsecs[0];
+			vtx1 = intsecs[1];
+
+			if (comp(vtx0, dim) > comp(vtx1, dim))
+				std::swap(vtx0, vtx1);
+
+			comp(vtx0, dim) < plane ? left.grow(vtx0) : right.grow(vtx0);
+			comp(vtx1, dim) < plane ? left.grow(vtx1) : right.grow(vtx1);
+			if (comp(vtx0, dim) < plane && plane < comp(vtx1, dim)) {
+				Vector4 intersec{
+					Vector4::Lerp(
+						vtx0,
+						vtx1,
+						std::max<float>(
+							0.f,
+							std::min<float>(
+								(plane - comp(vtx0, dim)) / (comp(vtx1, dim) - comp(vtx0, dim)),
+								1.f
+							)
+						)
+					)
+				};
+				left.grow(intersec);
+				right.grow(intersec);
 			}
 		}
-
-		std::sort(vts.begin(), vts.end(), [&](const Vector4& v0, const Vector4& v1) {
-			return comp(const_cast<Vector4&>(v0), dim) < comp(const_cast<Vector4&>(v1), dim);
-		});
-
-		//std::vector<float> pb{ comp(vts[0], dim), comp(vts[1], dim) , comp(vts[2], dim) };
-
-		//float bmin{ comp(space.bmin, dim) };
-		//float bmax{ comp(space.bmax, dim) };
-
-		//if (pb[2] < bmin || bmax < pb[0]) return {{}, {}};
-
-		//// find left
-		//std::vector<Vector4> left;
-		//if (comp(vts[0], dim) < bmin) {
-		//	left = primPlaneIntersections(vts, dim, bmin);
-		//}
+		
+		return { left, right };
+		//return {
+		//	AABB::bbIntersection(prim.bb, left),
+		//	AABB::bbIntersection(prim.bb, right)
+		//};
 	}
 
 	// sah, binned & other
 	void updateDepths(INT id);
 
+	float& comp(Vector3& v, INT idx);
 	float& comp(Vector4& v, INT idx);
 
 	void updateNodeBounds(INT nodeIdx);

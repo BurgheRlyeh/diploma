@@ -32,9 +32,9 @@ struct AABB {
     }
 
     inline bool isCorrect() const {
-        return bmin.x + std::numeric_limits<float>::epsilon() < bmax.x
-            && bmin.y + std::numeric_limits<float>::epsilon() < bmax.y
-            && bmin.z + std::numeric_limits<float>::epsilon() < bmax.z;
+        return bmin.x < bmax.x + std::numeric_limits<float>::epsilon()
+            && bmin.y < bmax.y + std::numeric_limits<float>::epsilon()
+            && bmin.z < bmax.z + std::numeric_limits<float>::epsilon();
     }
 
     inline DirectX::SimpleMath::Vector4 getVert(int idx) const {
@@ -85,6 +85,15 @@ struct AABB {
         if (bmax.y > bmin.y) o.y /= bmax.y - bmin.y;
         if (bmax.z > bmin.z) o.z /= bmax.z - bmin.z;
         return o;
+    }
+
+    inline bool contains(const DirectX::SimpleMath::Vector4& v) const {
+        return bmin.x - std::numeric_limits<float>::epsilon() <= v.x + std::numeric_limits<float>::epsilon()
+            && v.x - std::numeric_limits<float>::epsilon() <= bmax.x + std::numeric_limits<float>::epsilon()
+            && bmin.y - std::numeric_limits<float>::epsilon() <= v.y + std::numeric_limits<float>::epsilon()
+            && v.y - std::numeric_limits<float>::epsilon() <= bmax.y + std::numeric_limits<float>::epsilon()
+            && bmin.z - std::numeric_limits<float>::epsilon() <= v.z + std::numeric_limits<float>::epsilon()
+            && v.z - std::numeric_limits<float>::epsilon() <= bmax.z + std::numeric_limits<float>::epsilon();
     }
 
     static inline AABB bbUnion(const AABB& bb1, const AABB& bb2) {

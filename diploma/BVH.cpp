@@ -1968,30 +1968,42 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly, std::function<
 				}
 				// split primitive
 				else {
-					std::pair<AABB, AABB> lrBoxes = splitPrimNaive(prim, node.bb, axis, splitPos);
+					std::pair<AABB, AABB> lrBoxes = splitPrimSmart(prim, node.bb, axis, splitPos);
 					Prim leftPart{ prim }, rightPart{ prim };
 					leftPart.bb = lrBoxes.first;
 					//leftPart.ctr = leftPart.bb.bmin + leftPart.bb.bmax / 2;
 					rightPart.bb = lrBoxes.second;
 					//rightPart.ctr = rightPart.bb.bmin + rightPart.bb.bmax / 2;
 
-					//if (!leftPart.bb.isCorrect()) {
-					//	if (rightPart.bb.isCorrect()) {
-					//		prim = rightPart;
-					//		++rCnt;
-					//	}
-					//}
-					//else if (!rightPart.bb.isCorrect()) {
-					//	prim = leftPart;
-					//	if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
-					//	else {
-					//		std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
-					//		std::swap(m_primRefs[i].subsetNearest, m_primRefs[rFirst].subsetNearest);
-					//	}
-					//	rFirst = m_primRefs[rFirst].next;
-					//	++lCnt;
-					//}
-					//else {
+					if (!leftPart.bb.isCorrect()) {
+						if (rightPart.bb.isCorrect()) {
+							prim = rightPart;
+							++rCnt;
+						}
+						else {
+							if (comp(prim.ctr, axis) < splitPos + std::numeric_limits<float>::epsilon()) {
+								if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
+								else {
+									std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
+									std::swap(m_primRefs[i].subsetNearest, m_primRefs[rFirst].subsetNearest);
+								}
+								rFirst = m_primRefs[rFirst].next;
+								++lCnt;
+							}
+							else ++rCnt;
+						}
+					}
+					else if (!rightPart.bb.isCorrect()) {
+						prim = leftPart;
+						if (!swapPrimIdOnly) std::swap(m_primRefs[i], m_primRefs[rFirst]);
+						else {
+							std::swap(m_primRefs[i].primId, m_primRefs[rFirst].primId);
+							std::swap(m_primRefs[i].subsetNearest, m_primRefs[rFirst].subsetNearest);
+						}
+						rFirst = m_primRefs[rFirst].next;
+						++lCnt;
+					}
+					else {
 						prim = leftPart;
 						m_prims.push_back(rightPart);
 
@@ -2009,7 +2021,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly, std::function<
 						rFirst = m_primRefs[rFirst].next;
 						++lCnt;
 						++rCnt;
-					//}
+					}
 
 				}
 			}
@@ -2491,6 +2503,15 @@ void BVH::updateDepths(INT id) {
 	for (; id != 0; id = m_nodes[id].leftCntPar.z) ++d;
 	m_depthMin = std::min(m_depthMin, d);
 	m_depthMax = std::max(m_depthMax, d);
+}
+
+float& BVH::comp(Vector3& v, INT idx) {
+	switch (idx) {
+	case 0: return v.x;
+	case 1: return v.y;
+	case 2: return v.z;
+	default: throw;
+	}
 }
 
 float& BVH::comp(Vector4& v, INT idx) {
