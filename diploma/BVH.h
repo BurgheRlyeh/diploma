@@ -332,7 +332,7 @@ private:
 	}
 
 	void subdivideSBVHStohQueue(INT rootId, bool swapPrimIdOnly, std::function<void(int)> leafProc);
-	void subdivideStohQueue(INT rootId, bool swapPrimIdOnly);
+	void subdivideStohQueue(INT rootId, bool swapPrimIdOnly, std::function<void(int)> leafProc);
 	void subdivideStohIntelQueue(INT rootId);
 	void updateNodeBoundsStoh(INT nodeIdx);
 	void updateNodeBoundsSBVH(INT nodeIdx);

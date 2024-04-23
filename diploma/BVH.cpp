@@ -1368,7 +1368,13 @@ void BVH::buildStochastic() {
 	updateNodeBoundsStoh(0);
 
 	if (m_algSubsetBuild == 0) {
-		subdivideStohQueue(0, true);
+		subdivideStohQueue(0, true, [&](int n) {
+			BVHNode& node{ m_nodes[n] };
+			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
+			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
+				m_primRefs[(*it).subsetNearest].leafId = n;
+			}
+		});
 
 		for (int i{}; i < frmSize - 1; ++i) {
 			m_primRefs[i].next = i + 1;
@@ -1381,7 +1387,7 @@ void BVH::buildStochastic() {
 		}
 		m_primRefs[frmSize - 1].next = std::numeric_limits<unsigned>::max();
 
-		subdivideSBVHStohQueue(0, true, [=](int nodeId) {
+		subdivideSBVHStohQueue(0, true, [&](int nodeId) {
 			BVHNode& node{ m_nodes[nodeId] };
 			for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; ++cnt, i = m_primRefs[i].next) {
 				m_primRefs[m_primRefs[i].subsetNearest].leafId = nodeId;
@@ -1399,8 +1405,9 @@ void BVH::buildStochastic() {
 			int newLeft{ static_cast<int>(id) };
 			for (int i{ m_nodes[nodeId].leftCntPar.x }, cnt{}; cnt < m_nodes[nodeId].leftCntPar.y; ++cnt, i = temp[i].next) {
 				m_subset2leafs[temp[i].subsetNearest].push_back(nodeId);
-				m_primRefs[id] = temp[i];
+				m_primRefs[id].primId = temp[i].primId;
 				m_primRefs[id].next = id + 1;
+				m_primRefs[id].subsetNearest = temp[i].subsetNearest;
 				++id;
 			}
 			m_nodes[nodeId].leftCntPar.x = newLeft;
@@ -1501,7 +1508,9 @@ void BVH::buildStochastic() {
 
 		updateNodeBoundsStoh(nodeId);
 		if (m_algNotSubsetBuild == 0)
-			subdivideStohQueue(nodeId, false);
+			subdivideStohQueue(nodeId, false, [=](int n) {
+				++m_leafsCnt;
+			});
 		else if (m_algNotSubsetBuild == 1) {
 			for (int i{}; i < m_nodes[nodeId].leftCntPar.y; ++i) {
 				m_primRefs[m_nodes[nodeId].leftCntPar.x + i].next = ++nextCnt;
@@ -1968,7 +1977,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly, std::function<
 				}
 				// split primitive
 				else {
-					std::pair<AABB, AABB> lrBoxes = splitPrimSmart(prim, node.bb, axis, splitPos);
+					std::pair<AABB, AABB> lrBoxes = splitPrimNaive(prim, node.bb, axis, splitPos);
 					Prim leftPart{ prim }, rightPart{ prim };
 					leftPart.bb = lrBoxes.first;
 					//leftPart.ctr = leftPart.bb.bmin + leftPart.bb.bmax / 2;
@@ -2056,7 +2065,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly, std::function<
 	}
 }
 
-void BVH::subdivideStohQueue(INT rootId, bool swapPrimIdOnly) {
+void BVH::subdivideStohQueue(INT rootId, bool swapPrimIdOnly, std::function<void(int)> leafProc) {
 	std::queue<int> nodes{};
 	nodes.push(rootId);
 
@@ -2067,13 +2076,7 @@ void BVH::subdivideStohQueue(INT rootId, bool swapPrimIdOnly) {
 		BVHNode& node{ m_nodes[nodeId] };
 
 		if (node.leftCntPar.y <= m_primsPerLeaf) {
-			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
-			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-				m_primRefs[(*it).subsetNearest].leafId = nodeId;
-			}
-
-			++m_leafsCnt;
-			updateDepths(nodeId);
+			leafProc(nodeId);
 			continue;
 		}
 
@@ -2092,13 +2095,7 @@ void BVH::subdivideStohQueue(INT rootId, bool swapPrimIdOnly) {
 
 		//if (m_algBuild != 0 && cost >= node.bb.area() * node.leftCntPar.y) {
 		if (m_algBuild != 0 && cost >= node.leftCntPar.y) {
-			auto it = std::next(m_primRefs.begin(), node.leftCntPar.x);
-			for (int i{ node.leftCntPar.x }; i < node.leftCntPar.x + node.leftCntPar.y; ++i, ++it) {
-				m_primRefs[(*it).subsetNearest].leafId = nodeId;
-			}
-
-			++m_leafsCnt;
-			updateDepths(nodeId);
+			leafProc(nodeId);
 			continue;
 		}
 
