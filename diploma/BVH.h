@@ -8,6 +8,8 @@
 #include <map>
 #include <stack>
 
+#include <DirectXCollision.h>
+
 struct AABB;
 
 using namespace DirectX;
@@ -274,7 +276,7 @@ private:
 
 	int findBestLeafBruteforce(int primId);
 	int findBestLeafMorton(int primId, int frmNearest);
-	int findBestLeafSmartBVH(int primId, int frmNearest);
+	int findBestLeafSmartBVH(int primId, int frmNeares, float& costRest);
 
 	// TODO with backtrack memory
 	int leftLeaf(int leaf) {
@@ -367,13 +369,13 @@ private:
 		return intersections;
 	}
 
-	std::pair<AABB, AABB> splitPrimSuperNaive(const Prim& prim, AABB space, int dim, float plane) {
+	std::pair<AABB, AABB> splitPrimNaive(const Prim& prim, AABB space, int dim, float plane) {
 		AABB left{ prim.bb }, right{ prim.bb };
 		comp(left.bmax, dim) = comp(right.bmin, dim) = plane;
 		return { AABB::bbIntersection(space, left), AABB::bbIntersection(space, right) };
 	}
 
-	std::pair<AABB, AABB> splitPrimNaive(const Prim& prim, AABB space, int dim, float plane) {
+	std::pair<AABB, AABB> splitPrimSmart(const Prim& prim, AABB space, int dim, float plane) {
 		AABB left{}, right{};
 		
 		Vector4 vts[3]{ prim.v0, prim.v1, prim.v2 };
@@ -402,85 +404,6 @@ private:
 		comp(left.bmax, dim) = plane;
 		comp(right.bmin, dim) = plane;
 		return { AABB::bbIntersection(space, left), AABB::bbIntersection(space, right) };
-	}
-
-	std::pair<AABB, AABB> splitPrimSmart(const Prim& prim, AABB space, int dim, float plane) {
-		AABB left{}, right{};
-		
-		Vector4 vts[3]{ prim.v0, prim.v1, prim.v2 };
-
-		for (int i{}; i < 3; ++i) {
-			Vector4 vtx0{ vts[i] };
-			Vector4 vtx1{ vts[(i + 1) % 3] };
-
-			Vector3 v0{ vtx0.x, vtx0.y, vtx0.z };
-			Vector3 v1{ vtx1.x, vtx1.y, vtx1.z };
-
-			Ray edge{ v0, v1 - v0 };
-
-			std::vector<Vector4> intsecs{};
-
-			if (space.contains(vtx0))
-				intsecs.push_back(vtx0);
-			if (space.contains(vtx1))
-				intsecs.push_back(vtx1);
-
-			for (int a{}; a < 3 && intsecs.size() != 2; ++a) {
-				Vector3 norm{};
-				comp(norm, a) = 1.f;
-
-				Plane pmin{ { space.bmin.x, space.bmin.y, space.bmin.z }, norm };
-				Plane pmax{ { space.bmax.x, space.bmax.y, space.bmax.z }, norm };
-
-				float t{};
-				if (edge.Intersects(pmin, t) && t <= 1) {
-					Vector4 intsec{ Vector4::Lerp(vtx0, vtx1, t) };
-					intsecs.push_back(intsec);
-				}
-				if (edge.Intersects(pmax, t) && t <= 1) {
-					Vector4 intsec{ Vector4::Lerp(vtx0, vtx1, t) };
-					intsecs.push_back(intsec);
-				}
-			}
-
-			if (intsecs.empty()) {
-				continue;
-			}
-
-			assert(intsecs.size() == 2);
-
-			vtx0 = intsecs[0];
-			vtx1 = intsecs[1];
-
-			if (comp(vtx0, dim) > comp(vtx1, dim))
-				std::swap(vtx0, vtx1);
-
-			comp(vtx0, dim) < plane ? left.grow(vtx0) : right.grow(vtx0);
-			comp(vtx1, dim) < plane ? left.grow(vtx1) : right.grow(vtx1);
-			if (comp(vtx0, dim) < plane && plane < comp(vtx1, dim)) {
-				Vector4 intersec{
-					Vector4::Lerp(
-						vtx0,
-						vtx1,
-						std::max<float>(
-							0.f,
-							std::min<float>(
-								(plane - comp(vtx0, dim)) / (comp(vtx1, dim) - comp(vtx0, dim)),
-								1.f
-							)
-						)
-					)
-				};
-				left.grow(intersec);
-				right.grow(intersec);
-			}
-		}
-		
-		return { left, right };
-		//return {
-		//	AABB::bbIntersection(prim.bb, left),
-		//	AABB::bbIntersection(prim.bb, right)
-		//};
 	}
 
 	// sah, binned & other

@@ -30,9 +30,9 @@ void InputHandler::mouseWheel(int delta) {
 
 void InputHandler::keyPressed(int keyCode) {
 	switch (keyCode) {
-	case ' ':
-		renderer->switchRotation();
-		break;
+	//case ' ':
+	//	renderer->switchRotation();
+	//	break;
 
 	case 'B':
 	case 'b':
