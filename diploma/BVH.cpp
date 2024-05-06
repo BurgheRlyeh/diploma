@@ -611,6 +611,9 @@ void BVH::renderBVHImGui() {
 		ImGui::Checkbox("Subset SBVH", &isSubsetBuildSBVH);
 		if (isSubsetBuildSBVH) m_algSubsetBuild = 1;
 
+		if (m_algSubsetBuild == 1)
+			ImGui::DragFloat("Subset SBVH Overlap coef", &m_algSubsetSBVHOverlap, 0.01, 0.f, 1.f);
+
 		ImGui::Text("Non-Subset build algorithm:");
 
 		bool isNonSubsetBuildBinned{ m_algNotSubsetBuild == 0 };
@@ -620,6 +623,23 @@ void BVH::renderBVHImGui() {
 		bool isNonSubsetBuildSBVH{ m_algNotSubsetBuild == 1 };
 		ImGui::Checkbox("Non-Subset SBVH", &isNonSubsetBuildSBVH);
 		if (isNonSubsetBuildSBVH) m_algNotSubsetBuild = 1;
+
+		if (m_algNotSubsetBuild == 1)
+			ImGui::DragFloat("Not Subset SBVH Overlap coef", &m_algNotSubsetSBVHOverlap, 0.01, 0.f, 1.f);
+
+		ImGui::Text("Insertion prims splitting:");
+
+		bool isInsertNoSplit{ m_algInsertSplit == 0 };
+		ImGui::Checkbox("No split", &isInsertNoSplit);
+		if (isInsertNoSplit) m_algInsertSplit = 0;
+
+		bool isInsertSplit{ m_algInsertSplit == 1 };
+		ImGui::Checkbox("Split", &isInsertSplit);
+		if (isInsertSplit) m_algInsertSplit = 1;
+
+		if (m_algInsertSplit == 1) {
+			ImGui::DragFloat("Insert split overgrow coef", &m_insertSplitOvergrow, 0.01f, 0.f, 1.f);
+		}
 
 		ImGui::Text("Insertion prims algorithm:");
 
@@ -688,7 +708,7 @@ void BVH::renderBVHImGui() {
 
 	ImGui::Text("Statistics:");
 	ImGui::Text(" ");
-	ImGui::Text("SAH cost: %.3f", costSAH());
+	ImGui::Text("SAH cost: %.3f", m_sahCost);
 	//ImGui::Text(" ");
 	//ImGui::Text("Last BVH construction time (ms): %.3f", m_geomCPUAvgTime);
 	ImGui::Text(" ");
@@ -861,6 +881,7 @@ void BVH::init(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMa
 void BVH::build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
 	if (m_algBuild == 5) {
 		buildPsr(vts, vtsCnt, ids, idsCnt, modelMatrix);
+		m_sahCost = costSAH();
 		return;
 	}
 
@@ -909,40 +930,13 @@ void BVH::build(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelM
 		//}
 	}
 	else {
-		//float frmPartBest{}, uniformBest{};
-		//float costBest{ std::numeric_limits<float>::max() };
-		//for (int i{ 2 }; i < 100; ++i) {
-		//	for (int j{}; j < 100; j += 10) {
-		//		init(vts, vtsCnt, ids, idsCnt, modelMatrix);
-		//		m_frmPart = i / 100.f;
-		//		m_uniform = j / 100.f;
-		//		buildStochastic();
-		//		binaryBVH2QBVH();
-		//		float cost{ costSAH() };
-
-		//		std::wstringstream ss;
-		//		ss << m_frmPart << TEXT("/") << m_uniform << TEXT(" -> ") << cost << std::endl;
-		//		OutputDebugString(ss.str().c_str());
-
-		//		if (cost < costBest) {
-		//			ss.clear();
-		//			ss << cost << TEXT(" < ") << costBest << TEXT(" ->  update") << std::endl;
-		//			OutputDebugString(ss.str().c_str());
-
-		//			costBest = cost;
-		//			frmPartBest = m_frmPart;
-		//			uniformBest = m_uniform;
-		//		}
-		//	}
-		//}
-		//m_frmPart = frmPartBest;
-		//m_uniform = uniformBest;
-
 		buildStochastic();
 	}
 
 	if (m_toQBVH)
 		binaryBVH2QBVH();
+
+	m_sahCost = costSAH();
 }
 
 void BVH::buildPsr(Vector4* vts, INT vtsCnt, XMINT4* ids, INT idsCnt, Matrix modelMatrix) {
@@ -1387,6 +1381,7 @@ void BVH::buildStochastic() {
 		}
 		m_primRefs[frmSize - 1].next = std::numeric_limits<unsigned>::max();
 
+		m_algSBVHOverlap = m_algSubsetSBVHOverlap;
 		subdivideSBVHStohQueue(0, true, [&](int nodeId) {
 			BVHNode& node{ m_nodes[nodeId] };
 			for (int i{ node.leftCntPar.x }, cnt{}; cnt < node.leftCntPar.y; ++cnt, i = m_primRefs[i].next) {
@@ -1414,32 +1409,106 @@ void BVH::buildStochastic() {
 		});
 		m_primRefs[m_primRefs.size() - 1].next = std::numeric_limits<unsigned>::max();
 	}
-	m_frmSize = frmSize = m_primRefs.size();
+	m_frmSize = m_primRefs.size();
 
-	for (int i{}; i < notSubset.size(); ++i) {
+	int notFrmSize = notSubset.size();
+	for (int j{}; j < frmSize; ++j) {
+		for (int i{ j }; i < notFrmSize; i += frmSize) {
+			int leaf{};
+			if (m_algInsert == 1)
+				leaf = findBestLeafMorton(notSubset[i].primId, notSubset[i].subsetNearest);
+			else if (m_algInsert == 2) {
+				int nearest = m_primRefs[notSubset[i].subsetNearest].leafId;
+				if (m_algSubsetBuild == 1)
+					nearest = m_subset2leafs[notSubset[i].subsetNearest][0];
+				leaf = findBestLeafSmartBVH(notSubset[i].primId, nearest);
+			}
+			else
+				leaf = findBestLeafBruteforce(notSubset[i].primId);
+
+			AABB bbGrown{ m_nodes[leaf].bb };
+			bbGrown.grow(m_prims[notSubset[i].primId].bb);
+			if (m_algInsertSplit == 1
+				&& 1 - m_nodes[leaf].bb.area() / bbGrown.area() < m_insertSplitOvergrow + std::numeric_limits<float>::epsilon()
+			) {
+				BVHNode& l{ m_nodes[leaf] };
+				Prim& prim{ m_prims[notSubset[i].primId] };
+
+				size_t sizeLim{ 2 * m_primsCntOrig - m_primRefs.size() + i - 1 };
+				for (int dim{}; dim < 3 && notSubset.size() + 2 < sizeLim; ++dim) {
+					float leafBoxMin{ comp(l.bb.bmin, dim) };
+					float leafBoxMax{ comp(l.bb.bmax, dim) };
+
+					float primBoxMin{ comp(m_prims[notSubset[i].primId].bb.bmin, dim) };
+					float primBoxMax{ comp(m_prims[notSubset[i].primId].bb.bmax, dim) };
+
+					if (primBoxMin < leafBoxMin && leafBoxMin < primBoxMax) {
+						std::pair<AABB, AABB> lrBoxes = splitPrimSmart(m_prims[notSubset[i].primId], m_prims[notSubset[i].primId].bb, dim, leafBoxMin);
+						if (lrBoxes.first.isCorrect() && lrBoxes.second.isCorrect()) {
+							Prim offcut{ m_prims[notSubset[i].primId] };
+							offcut.bb = lrBoxes.first;
+							m_prims.push_back(offcut);
+
+							PrimRef offcutRef{ notSubset[i] };
+							offcutRef.primId = m_prims.size() - 1;
+							notSubset.push_back(offcutRef);
+
+							m_prims[notSubset[i].primId].bb = lrBoxes.second;
+							--sizeLim;
+						}
+					}
+
+					if (primBoxMin < leafBoxMax && leafBoxMax < primBoxMax) {
+						std::pair<AABB, AABB> lrBoxes = splitPrimSmart(m_prims[notSubset[i].primId], m_prims[notSubset[i].primId].bb, dim, leafBoxMax);
+						if (lrBoxes.first.isCorrect() && lrBoxes.second.isCorrect()) {
+							Prim offcut{ m_prims[notSubset[i].primId] };
+							offcut.bb = lrBoxes.second;
+							m_prims.push_back(offcut);
+
+							PrimRef offcutRef{ notSubset[i] };
+							offcutRef.primId = m_prims.size() - 1;
+							notSubset.push_back(offcutRef);
+
+							m_prims[notSubset[i].primId].bb = lrBoxes.first;
+							--sizeLim;
+						}
+					}
+				}
+			}
+		
+			++m_nodes[leaf].leftCntPar.w;
+			if (m_algInsertConds == 2 || m_algInsertConds == 3)
+				m_nodes[leaf].bb.grow(m_prims[notSubset[i].primId].bb);
+
+			PrimRef& frmPrim{ m_primRefs[m_nodes[leaf].leftCntPar.x] };
+			notSubset[i].next = frmPrim.next;
+			frmPrim.next = m_primRefs.size();
+			m_primRefs.push_back(notSubset[i]);
+		}
+	}
+
+	for (int i{ notFrmSize }; i < notSubset.size(); ++i) {
 		int leaf{};
-		float cost{};
 		if (m_algInsert == 1)
 			leaf = findBestLeafMorton(notSubset[i].primId, notSubset[i].subsetNearest);
 		else if (m_algInsert == 2) {
 			int nearest = m_primRefs[notSubset[i].subsetNearest].leafId;
 			if (m_algSubsetBuild == 1)
 				nearest = m_subset2leafs[notSubset[i].subsetNearest][0];
-			leaf = findBestLeafSmartBVH(notSubset[i].primId, nearest, cost);
+			leaf = findBestLeafSmartBVH(notSubset[i].primId, nearest);
 		}
 		else
 			leaf = findBestLeafBruteforce(notSubset[i].primId);
 
-		// true false
-		float bbGrow{ cost / m_nodes[leaf].bb.area() };
-		if (true
-			&& bbGrow > 1.f + 0.5f + std::numeric_limits<float>::epsilon()
-			&& AABB::bbIntersection(m_nodes[leaf].bb, m_prims[notSubset[i].primId].bb).area() > std::numeric_limits<float>::epsilon()
-		) {
+		AABB bbGrown{ m_nodes[leaf].bb };
+		bbGrown.grow(m_prims[notSubset[i].primId].bb);
+		if (m_algInsertSplit == 1
+			&& 1 - m_nodes[leaf].bb.area() / bbGrown.area() < m_insertSplitOvergrow + std::numeric_limits<float>::epsilon()
+			) {
 			BVHNode& l{ m_nodes[leaf] };
 			Prim& prim{ m_prims[notSubset[i].primId] };
 
-			size_t sizeLim{ 2 * m_primsCntOrig - m_primRefs.size() + i - 1 }; // TODO upd during adding in for
+			size_t sizeLim{ 2 * m_primsCntOrig - m_primRefs.size() + i - 1 };
 			for (int dim{}; dim < 3 && notSubset.size() + 2 < sizeLim; ++dim) {
 				float leafBoxMin{ comp(l.bb.bmin, dim) };
 				float leafBoxMax{ comp(l.bb.bmax, dim) };
@@ -1447,9 +1516,7 @@ void BVH::buildStochastic() {
 				float primBoxMin{ comp(m_prims[notSubset[i].primId].bb.bmin, dim) };
 				float primBoxMax{ comp(m_prims[notSubset[i].primId].bb.bmax, dim) };
 
-				float eps{ std::numeric_limits<float>::epsilon() };
-
-				if (primBoxMin + eps < leafBoxMin - eps && leafBoxMin + eps < primBoxMax - eps) {
+				if (primBoxMin < leafBoxMin && leafBoxMin < primBoxMax) {
 					std::pair<AABB, AABB> lrBoxes = splitPrimSmart(m_prims[notSubset[i].primId], m_prims[notSubset[i].primId].bb, dim, leafBoxMin);
 					if (lrBoxes.first.isCorrect() && lrBoxes.second.isCorrect()) {
 						Prim offcut{ m_prims[notSubset[i].primId] };
@@ -1461,10 +1528,11 @@ void BVH::buildStochastic() {
 						notSubset.push_back(offcutRef);
 
 						m_prims[notSubset[i].primId].bb = lrBoxes.second;
+						--sizeLim;
 					}
 				}
 
-				if (primBoxMin + eps < leafBoxMax - eps && leafBoxMax + eps < primBoxMax - eps) {
+				if (primBoxMin < leafBoxMax && leafBoxMax < primBoxMax) {
 					std::pair<AABB, AABB> lrBoxes = splitPrimSmart(m_prims[notSubset[i].primId], m_prims[notSubset[i].primId].bb, dim, leafBoxMax);
 					if (lrBoxes.first.isCorrect() && lrBoxes.second.isCorrect()) {
 						Prim offcut{ m_prims[notSubset[i].primId] };
@@ -1476,11 +1544,12 @@ void BVH::buildStochastic() {
 						notSubset.push_back(offcutRef);
 
 						m_prims[notSubset[i].primId].bb = lrBoxes.first;
+						--sizeLim;
 					}
 				}
 			}
 		}
-		
+
 		++m_nodes[leaf].leftCntPar.w;
 		if (m_algInsertConds == 2 || m_algInsertConds == 3)
 			m_nodes[leaf].bb.grow(m_prims[notSubset[i].primId].bb);
@@ -1542,6 +1611,8 @@ void BVH::buildStochastic() {
 
 	m_leafsCnt = 0;
 	int firstOffset{}, nextCnt{}, lastNodeId{};
+	if (m_algNotSubsetBuild == 1)
+		m_algSBVHOverlap = m_algNotSubsetSBVHOverlap;
 	postForEach(0, [&](int nodeId) {
 		if (!m_nodes[nodeId].leftCntPar.y) {
 			m_nodes[nodeId].bb = AABB::bbUnion(
@@ -1591,21 +1662,27 @@ void BVH::buildStochastic() {
 				return;
 
 			int newLeft{ static_cast<int>(id) };
+			std::map<int, bool> cnts{};
 			for (int i{ m_nodes[nodeId].leftCntPar.x }, cnt{}; cnt < m_nodes[nodeId].leftCntPar.y; ++cnt, i = temp[i].next) {
+				int primId{ m_prims[temp[i].primId].primId };
+				if (cnts[primId])
+					continue;
+				cnts[primId] = true;
+				
 				m_primRefs[id] = temp[i];
-				//m_primRefs[id].primId = m_prims[m_primRefs[id].primId].primId;
+				m_primRefs[id].primId = primId;
 				++id;
 			}
 			m_nodes[nodeId].leftCntPar.x = newLeft;
 		});
 	}
 
-	for (int i{}; i < m_primRefs.size(); ++i) {
-		int primId{ m_prims[m_primRefs[i].primId].primId};
-		if (m_primRefs[i].primId != primId) {
-			m_primRefs[i].primId = primId;
-		}
-	}
+	//for (int i{}; i < m_primRefs.size(); ++i) {
+	//	int primId{ m_prims[m_primRefs[i].primId].primId};
+	//	if (m_primRefs[i].primId != primId) {
+	//		m_primRefs[i].primId = primId;
+	//	}
+	//}
 	
 	m_primsCnt = m_primRefs.size();
 	m_nodes[0] = m_nodes[0];
@@ -1681,7 +1758,7 @@ int BVH::findBestLeafMorton(int primId, int frmNearest) {
 	return best;
 }
 
-int BVH::findBestLeafSmartBVH(int primId, int frmNearest, float& costRes) {
+int BVH::findBestLeafSmartBVH(int primId, int frmNearest) {
 	Prim prim = m_prims[primId];
 
 	int bestLeaf{ static_cast<int>(frmNearest) };
@@ -1750,7 +1827,6 @@ int BVH::findBestLeafSmartBVH(int primId, int frmNearest, float& costRes) {
 		}
 	}
 
-	costRes = bestCost;
 	return bestLeaf;
 }
 
@@ -1944,7 +2020,7 @@ void BVH::subdivideSBVHStohQueue(int rootId, bool swapPrimIdOnly, std::function<
 		bool isStdSubdiv{ m_primRefs.size() == 2 * m_primsCntOrig };
 		if (!isStdSubdiv) {
 			AABB intersect = AABB::bbIntersection(lBoxBin, rBoxBin);
-			isStdSubdiv = !intersect.isCorrect() || intersect.area() < 0.01f * node.bb.area();
+			isStdSubdiv = !intersect.isCorrect() || 1 - intersect.area() / node.bb.area() >= m_algSBVHOverlap;
 		}
 
 		if (!isStdSubdiv) {

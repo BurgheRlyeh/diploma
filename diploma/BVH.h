@@ -162,9 +162,19 @@ private:
 	// 0 - binned sah
 	// 1 - sbvh
 	int m_algSubsetBuild{ 1 };
+	float m_algSubsetSBVHOverlap{};
+
 	// 0 - binned sah
 	// 1 - sbvh
 	int m_algNotSubsetBuild{ 1 };
+	float m_algNotSubsetSBVHOverlap{};
+
+	float m_algSBVHOverlap{};
+
+	// 0 - no split
+	// 1 - split
+	int m_algInsertSplit{};
+	float m_insertSplitOvergrow{};
 
 	// 0 - orig
 	// 1 - upd prims cnt
@@ -196,6 +206,7 @@ private:
 	int m_insertSearchWindow{ 10 };
 
 	int m_frmSize{};
+	float m_sahCost{};
 
 public:
 	void render(ID3D11SamplerState* pSampler, ID3D11Buffer* pSceneBuffer);
@@ -276,7 +287,7 @@ private:
 
 	int findBestLeafBruteforce(int primId);
 	int findBestLeafMorton(int primId, int frmNearest);
-	int findBestLeafSmartBVH(int primId, int frmNeares, float& costRest);
+	int findBestLeafSmartBVH(int primId, int frmNeares);
 
 	// TODO with backtrack memory
 	int leftLeaf(int leaf) {

@@ -1,5 +1,9 @@
 #define LIMIT_V 1013
 #define LIMIT_I 1107
+
+#define MAX_LEVEL 15
+#define MAX_STACK 4
+
 cbuffer ModelBuffer: register(b0) {
     int4 primsCnt;
     float4x4 mModel;
@@ -300,90 +304,67 @@ Intsec bvhStacklessIntersection(Ray ray) {
     return best;
 }
 
-int nearChildPsr(int nodeId, Ray ray) {
-    //int bestChild = nodes[nodeId].leftCntPar.x;
-    //float bestT = rayIntersectsAABB(ray, nodes[bestChild].bb);
-    
-    //for (int i = 1; i < nodes[nodeId].leftCntPar.w; ++i)
-    //{
-    //    int child = nodes[nodeId].leftCntPar.x + i;
-        
-    //    float t = rayIntersectsAABB(ray, nodes[child].bb);
-    //    if (t + 1e-6f < bestT)
-    //    {
-    //        bestChild = child;
-    //        bestT = t;
-    //    }
-    //}
-    
-    //return bestChild;
-    return nodes[nodeId].leftCntPar.x;
+struct NodeIntsec {
+    int nodeId;
+    float t;
+};
+
+void insertSort(inout NodeIntsec a[4], int length) {
+    for (int i = 1; i < length; i++) {
+        NodeIntsec value = a[i];
+        int j;
+        for (j = i - 1; j >= 0 && a[j].t > value.t; j--)
+            a[j + 1] = a[j];
+        a[j + 1] = value;
+    }
 }
 
-int siblingPsr(int nodeId, Ray ray)
+int nearChildQBVH(int nodeId, Ray ray, inout int visited) {
+    //return nodes[nodeId].leftCntPar.x;
+    
+    BVHNode node = nodes[nodeId];
+    
+    NodeIntsec c[4];
+    for (int i = 0; i < 4; ++i) {
+        c[i].nodeId = -1;
+        c[i].t = whnf.w;
+    }
+    int cSize = 0;
+    
+    for (int cnt = 0; cnt < node.leftCntPar.w; ++cnt) {
+        int childId = node.leftCntPar.x + cnt;
+        
+        float t = rayIntersectsAABB(ray, nodes[childId].bb);
+        if (t < whnf.w) {
+            c[cSize].nodeId = childId;
+            c[cSize].t = t;
+            ++cSize;
+        }
+    }
+    
+    if (cSize == 0)
+        return nodes[nodeId].leftCntPar.x;
+    
+    insertSort(c, cSize);
+    int val = c[visited].nodeId;
+    if (visited == cSize - 1) {
+        visited = 4;
+    }
+    return val;
+}
+
+int siblingQBVH(int nodeId, Ray ray, inout int visited)
 {
     int parent = nodes[nodeId].leftCntPar.z;
+    return nearChildQBVH(parent, ray, visited);
+    
     int sib = nodeId + 1;
     if (nodes[parent].leftCntPar.x + nodes[parent].leftCntPar.w == sib)
         return -1;
     return sib;
-    
-    //float prevT = rayIntersectsAABB(ray, nodes[nodeId].bb);
-    //if (abs(prevT - whnf.w) < 1e-6f)
-    //    return -1;
-    
-    //int worseChild = -1;
-    //float worseT = whnf.w;
-    
-    //int worstChild = -1;
-    //float worstT = whnf.z;
-    
-    //bool nextEq = false;
-    
-    //for (int i = 0; i < nodes[parent].leftCntPar.w; ++i)
-    //{
-    //    int child = nodes[parent].leftCntPar.x + i;
-    //    float t = rayIntersectsAABB(ray, nodes[child].bb);
-        
-    //    if (t > worstT + 1e-6f)
-    //    {
-    //        worstChild = child;
-    //        worstT = t;
-    //    }
-        
-    //    if (nodeId == child)
-    //        continue;
-        
-    //    // prevT < t
-    //    if (prevT + 1e-6f < t)
-    //    {
-    //        // t < worseT -> upd worseT
-    //        if (t + 1e-6f < worseT)
-    //        {
-    //            worseChild = child;
-    //            worseT = t;
-    //        }
-    //    }
-    //    else if (t + 1e-6f < prevT)
-    //    {
-            
-    //    }
-    //    // if equal
-    //    else if (abs(prevT - t) < 1e-6f && !nextEq)
-    //    {
-    //        worseChild = child;
-    //        //worseT = t;
-    //        //nextEq = true;
-    //    }
-    //}
-    
-    //if (nodeId == worstChild || abs(prevT - worstT) < 1e-6f)
-    //    return -1;
-    
-    //return worseChild;
 }
 
-Intsec bvhStacklessIntersectionPsr(Ray ray)
+Intsec bvhStacklessIntersectionQBVH(Ray ray)
 {
     Intsec best;
     best.mId = best.tId = -1;
@@ -392,66 +373,74 @@ Intsec bvhStacklessIntersectionPsr(Ray ray)
 
     if (rayIntersectsAABB(ray, nodes[0].bb) == whnf.w)
         return best;
+    
+    int trail[MAX_LEVEL];
+    for (int i = 0; i < MAX_LEVEL; ++i)
+        trail[i] = 0;
+    int level = 1;
 
-    for (int2 nodeState = int2(nearChildPsr(0, ray), 0); nodeState.x != 0;)
+    for (int2 nodeState = int2(nearChildQBVH(0, ray, trail[level]), 0), iters = int2(0, 0); nodeState.x != 0 && iters.x < 10000; ++iters.x)
     {
         // from parent
-        if (nodeState.y == 0)
-        {
+        if (nodeState.y == 0) {
             float t = rayIntersectsAABB(ray, nodes[nodeState.x].bb);
             if (t == whnf.w || instsAlgLeafsTCheck.w == 1 && best.t + 1e-6f < t)
             {
-                int sib = siblingPsr(nodeState.x, ray);
-                if (sib == -1)
-                    nodeState = int2(parent(nodeState.x), 1);
-                else
-                    nodeState = int2(sib, 2);
-            }
-            else
-            {
-                if (!isLeaf(nodeState.x))
-                    nodeState = int2(nearChildPsr(nodeState.x, ray), 0);
-                else
+                if (++trail[level] >= 4)
                 {
-                    if (instsAlgLeafsTCheck.z == 1)
-                    {
-                        Intsec intsec = bestBVHLeafIntersection(ray, nodeState.x);
-                        if (intsec.t < best.t)
-                            best = intsec;
-                    }
-                    
-                    int sib = siblingPsr(nodeState.x, ray);
-                    if (sib == -1)
-                        nodeState = int2(parent(nodeState.x), 1);
-                    else
-                        nodeState = int2(sib, 2);
-                    //nodeState = int2(siblingPsr(nodeState.x, ray), 2);
+                    --level;
+                    nodeState = int2(parent(nodeState.x), 1);
                 }
+                else
+                    nodeState = int2(siblingQBVH(nodeState.x, ray, trail[level]), 2);
+            }
+            // not leaf
+            else if (!isLeaf(nodeState.x)) {
+                trail[++level] = 0;
+                nodeState = int2(nearChildQBVH(nodeState.x, ray, trail[level]), 0);
+            }
+            else {
+                if (instsAlgLeafsTCheck.z == 1) {
+                    Intsec intsec = bestBVHLeafIntersection(ray, nodeState.x);
+                    if (intsec.t < best.t)
+                        best = intsec;
+                }
+                    
+                if (++trail[level] >= 4) {
+                    --level;
+                    nodeState = int2(parent(nodeState.x), 1);
+                }
+                else
+                    nodeState = int2(siblingQBVH(nodeState.x, ray, trail[level]), 2);
             }
         }
         // from child
         else if (nodeState.y == 1)
         {
-            int sib = siblingPsr(nodeState.x, ray);
-            if (sib == -1)
+            if (++trail[level] >= 4)
+            {
+                --level;
                 nodeState = int2(parent(nodeState.x), 1);
+            }
             else
-                nodeState = int2(sib, 2);
+                nodeState = int2(siblingQBVH(nodeState.x, ray, trail[level]), 2);
         }
         // from sibling
-        else if (nodeState.y == 2)
-        {
+        else if (nodeState.y == 2) {
             float t = rayIntersectsAABB(ray, nodes[nodeState.x].bb);
-            if (t == whnf.w || instsAlgLeafsTCheck.w == 1 && best.t + 1e-6f < t)
-            {
-                int sib = siblingPsr(nodeState.x, ray);
-                if (sib == -1) 
+            if (t == whnf.w || instsAlgLeafsTCheck.w == 1 && best.t + 1e-6f < t) {
+                if (++trail[level] >= 4)
+                {
+                    --level;
                     nodeState = int2(parent(nodeState.x), 1);
+                }
                 else
-                    nodeState = int2(sib, 2);
+                    nodeState = int2(siblingQBVH(nodeState.x, ray, trail[level]), 2);
             }
-            else if (!isLeaf(nodeState.x))
-                nodeState = int2(nearChildPsr(nodeState.x, ray), 0);
+            else if (!isLeaf(nodeState.x)) {
+                trail[++level] = 0;
+                nodeState = int2(nearChildQBVH(nodeState.x, ray, trail[level]), 0);
+            }
             else
             {
                 if (instsAlgLeafsTCheck.z == 1)
@@ -461,17 +450,158 @@ Intsec bvhStacklessIntersectionPsr(Ray ray)
                         best = intsec;
                 }
                 
-                int sib = siblingPsr(nodeState.x, ray);
-                if (sib == -1) 
+                if (++trail[level] >= 4)
+                {
+                    --level;
                     nodeState = int2(parent(nodeState.x), 1);
+                }
                 else
-                    nodeState = int2(sib, 2);
+                    nodeState = int2(siblingQBVH(nodeState.x, ray, trail[level]), 2);
             }
         }
     }
 
     return best;
 }
+
+//struct NodeIntsec {
+//    int nodeId = 0;
+//    float t = whnf.w;
+//    bool isParent = false;
+//    bool isLastChild = false;
+//};
+
+//struct ShortStack {
+//    NodeIntsec stack[MAX_STACK];
+//    int size = 0;
+//    int first = 0;
+    
+//    void pushOne(NodeIntsec val) {
+//        if (size < MAX_STACK) {
+//            stack[size++] = val;
+//            return;
+//        }
+        
+//        stack[first++] = val;
+//        if (first == MAX_STACK)
+//            first = 0;
+//    }
+//};
+
+//void insertSort(inout NodeIntsec a[4], int length) {
+//    for (int i = 1; i < length; i++) {
+//        NodeIntsec value = a[i];
+//        int j;
+//        for (j = i - 1; j >= 0 && a[j].t > value.t; j--)
+//            a[j + 1] = a[j];
+//        a[j + 1] = value;
+//    }
+//}
+
+//int findNextParentLevel(int trail[MAX_LEVEL], int level) {
+//    for (int i = level - 1; 0 <= i; --i)
+//        if (trail[i] != 4)
+//            return i;
+//    return -1;
+//}
+
+//bool pop(inout NodeIntsec nodeIntsec, inout ShortStack shortStack, inout int trail[MAX_LEVEL], inout int level)
+//{
+//    int parentLevel = findNextParentLevel(trail, level);
+//    if (parentLevel < 0)
+//        return true;
+//    ++trail[parentLevel];
+//    for (int i = parentLevel + 1; i < MAX_LEVEL; ++i) 
+//        trail[i] = 0;
+//    if (shortStack.size == 0) {
+//        nodeIntsec.nodeId = 0;
+//        nodeIntsec.t = whnf.z;
+//        nodeIntsec.isLastChild = nodeIntsec.isParent = false;
+//        level = 0;
+//    }
+//    else {
+//        nodeIntsec = shortStack.stack[--shortStack.size];
+//        if (nodeIntsec.isLastChild) {
+//            trail[parentLevel] = 4;
+//        }
+//        level = parentLevel + (nodeIntsec.isParent ? 0 : 1);
+//    }
+//    return false;
+//}
+
+//Intsec wideBvhTraversalWithShortStack(Ray ray) {
+//    Intsec best;
+//    best.mId = best.tId = -1;
+//    best.t = whnf.w;
+//    best.u = best.v = -1.f;
+    
+//    NodeIntsec nodeIntsec;
+//    nodeIntsec.nodeId = 0;
+//    nodeIntsec.t = best.t;
+//    nodeIntsec.isParent = nodeIntsec.isLastChild = false;
+    
+//    int trail[MAX_LEVEL];
+//    int level = 0;
+    
+//    ShortStack shortStack;
+//    for (int i = 0; i < MAX_LEVEL; ++i)
+//        shortStack.stack[i] = nodeIntsec;
+//    shortStack.size = 0;
+    
+//    bool exit = false;
+    
+//    while (!exit) {
+//        if (nodes[nodeIntsec.nodeId].leftCntPar.y) {
+//            Intsec intsec = bestBVHLeafIntersection(ray, nodeIntsec.nodeId);
+//            if (intsec.t < best.t)
+//                best = intsec;
+//            if (pop(nodeIntsec, shortStack, trail, level))
+//                exit = true;
+//            continue;
+//        }
+        
+//        int k = trail[level];
+        
+//        NodeIntsec s[4];
+//        int sizeS = 0;
+        
+//        for (int i = nodes[nodeIntsec.nodeId].leftCntPar.x, cnt = 0;
+//            cnt < nodes[nodeIntsec.nodeId].leftCntPar.w; ++cnt, ++i) {
+//            float t = rayIntersectsAABB(ray, nodes[i].bb);
+//            if (t < best.t) {
+//                s[sizeS].nodeId = i;
+//                s[sizeS].t = t;
+//                ++sizeS;
+//            }
+//        }
+        
+//        insertSort(s, sizeS);
+        
+//        NodeIntsec q[4];
+//        int sizeQ = 0;
+//        if (k == 4)
+//            q[sizeQ++] = s[sizeS - 1];
+//        else
+//            for (int i = k; i < sizeS; ++i)
+//                q[sizeQ++] = s[i];
+
+//        if (sizeQ == 0 && pop(nodeIntsec, shortStack, trail, level))
+//            exit = true;
+//        else {
+//            nodeIntsec = q[0];
+//            if (sizeQ == 1)
+//                trail[level] = 4;
+//            else {
+//                q[sizeQ - 1].isLastChild = true;
+//                for (int i = sizeQ - 1; i >= 0; --i)
+//                    shortStack.stack[shortStack.size++] = q[i];
+//            }
+//            ++level;
+//        }
+//       }
+    
+//    return best;
+//}
 
 [numthreads(1, 1, 1)]
 void main(uint3 DTid: SV_DispatchThreadID) {
@@ -493,7 +623,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
         }
     }
     else {
-        best = bvhStacklessIntersectionPsr(ray);
+        best = bvhStacklessIntersectionQBVH(ray);
     }
     
     if (best.t <= whnf.z || whnf.w <= best.t)
